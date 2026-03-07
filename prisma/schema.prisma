@@ -36,6 +36,9 @@ model ElderlyProfile {
   caregivers       Caregiver[]
   medications      Medication[]
   reminders        Reminder[]
+  assessmentQuestions AssessmentQuestion[]
+  assessmentConfig    AssessmentConfig?
+  assessmentSessions  AssessmentSession[]
   createdAt        DateTime     @default(now())
 }
 
@@ -101,6 +104,32 @@ model Reminder {
   createdAt        DateTime       @default(now())
 }
 
+enum AssessmentCategory {
+  PERSONAL
+  ORIENTATION
+  PEOPLE
+  GENERAL
+}
+
+enum AssessmentStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum AssessmentSeverity {
+  GREEN
+  YELLOW
+  RED
+}
+
+enum AnswerResult {
+  CORRECT
+  WRONG
+  UNCLEAR
+}
+
 enum CallStatus {
   PENDING
   CALLING
@@ -120,4 +149,56 @@ model ReminderLog {
   audioUrl      String?
   twilioCallSid String?
   createdAt     DateTime   @default(now())
+}
+
+model AssessmentQuestion {
+  id               String             @id @default(cuid())
+  elderlyProfileId String
+  elderlyProfile   ElderlyProfile     @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+  category         AssessmentCategory
+  questionText     String
+  correctAnswer    String
+  answers          AssessmentAnswer[]
+  createdAt        DateTime           @default(now())
+}
+
+model AssessmentConfig {
+  id               String         @id @default(cuid())
+  elderlyProfileId String         @unique
+  elderlyProfile   ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+  scheduledTime    String
+  questionsPerCall Int            @default(4)
+  active           Boolean        @default(false)
+  sessions         AssessmentSession[]
+  createdAt        DateTime       @default(now())
+}
+
+model AssessmentSession {
+  id               String             @id @default(cuid())
+  elderlyProfileId String
+  elderlyProfile   ElderlyProfile     @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+  configId         String
+  config           AssessmentConfig   @relation(fields: [configId], references: [id], onDelete: Cascade)
+  date             String
+  overallScore     Float?
+  status           AssessmentStatus   @default(PENDING)
+  summary          String?
+  severity         AssessmentSeverity?
+  twilioCallSid    String?
+  answers          AssessmentAnswer[]
+  createdAt        DateTime           @default(now())
+}
+
+model AssessmentAnswer {
+  id            String           @id @default(cuid())
+  sessionId     String
+  session       AssessmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionId    String
+  question      AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionText  String
+  correctAnswer String
+  elderAnswer   String?
+  result        AnswerResult?
+  recordingUrl  String?
+  createdAt     DateTime         @default(now())
 }
