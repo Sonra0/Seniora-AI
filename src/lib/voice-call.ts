@@ -104,10 +104,26 @@ export async function callEmergencyContact(elderlyProfileId: string) {
     return;
   }
 
-  const escapedName = escapeXml(profile.name);
-  const twiml = `<Response>
-    <Say>This is an urgent message from Seniora Care. We have been unable to reach ${escapedName} after multiple reminder call attempts. Please check on them as soon as possible. Thank you.</Say>
-  </Response>`;
+  const emergencyScript = `This is an urgent message from Seniora Care. We have been unable to reach ${profile.name} after multiple reminder call attempts. Please check on them as soon as possible. Thank you.`;
+
+  let twiml: string;
+  try {
+    const audioBuffer = await textToSpeech(emergencyScript, profile.voiceId || undefined);
+    const audioDir = path.join(process.cwd(), "public", "audio");
+    await mkdir(audioDir, { recursive: true });
+    const audioFileName = `emergency-${profile.id}-${Date.now()}.mp3`;
+    const audioPath = path.join(audioDir, audioFileName);
+    await writeFile(audioPath, audioBuffer);
+    const audioUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/audio/${audioFileName}`;
+
+    twiml = `<Response><Play>${audioUrl}</Play></Response>`;
+  } catch (ttsError) {
+    console.warn("ElevenLabs TTS failed for emergency call, using Twilio Say fallback:", ttsError);
+    const escapedName = escapeXml(profile.name);
+    twiml = `<Response>
+      <Say>This is an urgent message from Seniora Care. We have been unable to reach ${escapedName} after multiple reminder call attempts. Please check on them as soon as possible. Thank you.</Say>
+    </Response>`;
+  }
 
   try {
     await twilioClient.calls.create({
