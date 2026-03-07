@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 interface CreateElderlyFormProps {
   onSuccess: () => void;
@@ -23,7 +24,7 @@ export default function CreateElderlyForm({
     setError("");
 
     try {
-      const res = await fetch("/api/elderly", {
+      const res = await apiFetch("/api/elderly", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, phone, language }),

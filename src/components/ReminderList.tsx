@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { apiFetch } from "@/lib/api";
 
 interface Medication {
   id: string;
@@ -49,7 +50,7 @@ export default function ReminderList({
   const fetchReminders = useCallback(async () => {
     try {
       setError("");
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/elderly/${elderlyProfileId}/reminders`
       );
       if (!res.ok) throw new Error("Failed to load reminders");
@@ -69,7 +70,7 @@ export default function ReminderList({
   const handleToggle = async (reminder: Reminder) => {
     setTogglingId(reminder.id);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/elderly/${elderlyProfileId}/reminders/${reminder.id}`,
         {
           method: "PUT",
@@ -92,7 +93,7 @@ export default function ReminderList({
   const handleDelete = async (reminderId: string) => {
     setDeletingId(reminderId);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/elderly/${elderlyProfileId}/reminders/${reminderId}`,
         { method: "DELETE" }
       );

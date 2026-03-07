@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { apiFetch } from "@/lib/api";
 import PhoneVerification from "@/components/PhoneVerification";
 
 interface Caregiver {
@@ -27,7 +28,7 @@ export default function CaregiverList({
   const fetchCaregivers = useCallback(async () => {
     try {
       setError("");
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/elderly/${elderlyProfileId}/caregivers`
       );
       if (!res.ok) throw new Error("Failed to load caregivers");
@@ -47,7 +48,7 @@ export default function CaregiverList({
   const handleDelete = async (caregiverId: string) => {
     setDeletingId(caregiverId);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/elderly/${elderlyProfileId}/caregivers/${caregiverId}`,
         { method: "DELETE" }
       );

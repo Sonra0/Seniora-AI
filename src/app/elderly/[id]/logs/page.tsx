@@ -1,13 +1,14 @@
 "use client";
 
-import { useUser } from "@auth0/nextjs-auth0/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import ReminderLogList from "@/components/ReminderLogList";
 
 export default function LogsPage() {
-  const { user, isLoading: authLoading } = useUser();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
@@ -18,11 +19,11 @@ export default function LogsPage() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push("/api/auth/login");
+      router.push("/login");
       return;
     }
     if (user && id) {
-      fetch(`/api/elderly/${id}`)
+      apiFetch(`/api/elderly/${id}`)
         .then(async (res) => {
           if (!res.ok) throw new Error("Failed to load profile");
           return res.json();

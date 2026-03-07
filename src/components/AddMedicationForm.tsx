@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 interface AddMedicationFormProps {
   elderlyProfileId: string;
@@ -23,7 +24,7 @@ export default function AddMedicationForm({
     setError("");
 
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/elderly/${elderlyProfileId}/medications`,
         {
           method: "POST",

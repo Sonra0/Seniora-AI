@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 interface ReminderLog {
   id: string;
@@ -54,7 +55,7 @@ export default function ReminderLogList({
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch(`/api/elderly/${elderlyProfileId}/logs`)
+    apiFetch(`/api/elderly/${elderlyProfileId}/logs`)
       .then(async (res) => {
         if (!res.ok) throw new Error("Failed to load logs");
         return res.json();

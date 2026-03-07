@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 interface PhoneVerificationProps {
   phone: string;
@@ -34,7 +35,7 @@ export default function PhoneVerification({
     setSending(true);
     setError("");
     try {
-      const res = await fetch("/api/verify/send", {
+      const res = await apiFetch("/api/verify/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, type, entityId }),
@@ -56,7 +57,7 @@ export default function PhoneVerification({
     setStep("verifying");
     setError("");
     try {
-      const res = await fetch("/api/verify/check", {
+      const res = await apiFetch("/api/verify/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, code: code.trim(), type, entityId }),

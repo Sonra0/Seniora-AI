@@ -1,10 +1,12 @@
 "use client";
 
-import { useUser } from "@auth0/nextjs-auth0/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import Link from "next/link";
 
 export default function Navbar() {
-  const { user } = useUser();
+  const { user } = useAuth();
 
   return (
     <nav className="sticky top-0 z-50 border-b border-gray-200 bg-white">
@@ -16,14 +18,14 @@ export default function Navbar() {
           {user && (
             <>
               <span className="hidden text-sm text-gray-600 sm:inline">
-                {user.name || user.email}
+                {user.displayName || user.email}
               </span>
-              <a
-                href="/api/auth/logout"
+              <button
+                onClick={() => signOut(auth)}
                 className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 Log out
-              </a>
+              </button>
             </>
           )}
         </div>

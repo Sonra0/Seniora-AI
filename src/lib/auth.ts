@@ -1,19 +1,29 @@
-import { getSession } from "@auth0/nextjs-auth0";
+import { headers } from "next/headers";
+import { adminAuth } from "./firebase-admin";
 import { prisma } from "./prisma";
 
 export async function getCurrentUser() {
-  const session = await getSession();
-  if (!session?.user) return null;
+  const headersList = await headers();
+  const authorization = headersList.get("authorization");
+  if (!authorization?.startsWith("Bearer ")) return null;
 
-  const user = await prisma.user.upsert({
-    where: { auth0Id: session.user.sub },
-    update: { email: session.user.email, name: session.user.name },
-    create: {
-      auth0Id: session.user.sub,
-      email: session.user.email,
-      name: session.user.name,
-    },
-  });
+  const token = authorization.split("Bearer ")[1];
 
-  return user;
+  try {
+    const decoded = await adminAuth.verifyIdToken(token);
+
+    const user = await prisma.user.upsert({
+      where: { firebaseUid: decoded.uid },
+      update: { email: decoded.email!, name: decoded.name || null },
+      create: {
+        firebaseUid: decoded.uid,
+        email: decoded.email!,
+        name: decoded.name || null,
+      },
+    });
+
+    return user;
+  } catch {
+    return null;
+  }
 }

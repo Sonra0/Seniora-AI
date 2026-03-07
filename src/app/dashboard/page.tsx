@@ -1,7 +1,8 @@
 "use client";
 
-import { useUser } from "@auth0/nextjs-auth0/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState, useCallback } from "react";
+import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import ElderlyProfileCard from "@/components/ElderlyProfileCard";
 import CreateElderlyForm from "@/components/CreateElderlyForm";
@@ -17,7 +18,7 @@ interface ElderlyProfile {
 }
 
 export default function DashboardPage() {
-  const { user, isLoading: authLoading } = useUser();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [profiles, setProfiles] = useState<ElderlyProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,7 +26,7 @@ export default function DashboardPage() {
 
   const fetchProfiles = useCallback(async () => {
     try {
-      const res = await fetch("/api/elderly");
+      const res = await apiFetch("/api/elderly");
       if (res.ok) {
         const data = await res.json();
         setProfiles(data);
@@ -39,7 +40,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push("/api/auth/login");
+      router.push("/login");
       return;
     }
     if (user) {

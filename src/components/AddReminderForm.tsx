@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiFetch } from "@/lib/api";
 
 interface Medication {
   id: string;
@@ -37,7 +38,7 @@ export default function AddReminderForm({
   useEffect(() => {
     if (type === "MEDICATION") {
       setLoadingMeds(true);
-      fetch(`/api/elderly/${elderlyProfileId}/medications`)
+      apiFetch(`/api/elderly/${elderlyProfileId}/medications`)
         .then(async (res) => {
           if (!res.ok) throw new Error("Failed to load medications");
           return res.json();

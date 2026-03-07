@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { apiFetch } from "@/lib/api";
 
 interface Medication {
   id: string;
@@ -33,7 +34,7 @@ export default function MedicationList({
   const fetchMedications = useCallback(async () => {
     try {
       setError("");
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/elderly/${elderlyProfileId}/medications`
       );
       if (!res.ok) throw new Error("Failed to load medications");
@@ -53,7 +54,7 @@ export default function MedicationList({
   const handleDelete = async (medId: string) => {
     setDeletingId(medId);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/elderly/${elderlyProfileId}/medications/${medId}`,
         { method: "DELETE" }
       );
@@ -84,7 +85,7 @@ export default function MedicationList({
     if (!editForm.name.trim()) return;
     setSaving(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/elderly/${elderlyProfileId}/medications/${medId}`,
         {
           method: "PUT",
