@@ -4,11 +4,11 @@ import { useState, useRef } from "react";
 import { apiFetch } from "@/lib/api";
 
 const VOICES = [
-  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", gender: "Female" },
-  { id: "EXAVITQu4vr4xnSDxMaL", name: "Sarah", gender: "Female" },
-  { id: "pFZP5JQG7iQjIQuC4Bku", name: "Lily", gender: "Female" },
-  { id: "nPczCjzI2devNBz1zQrb", name: "Brian", gender: "Male" },
-  { id: "JBFqnCBsd6RMkjVDRZzb", name: "George", gender: "Male" },
+  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel", gender: "Female", avatar: "https://api.dicebear.com/9.x/lorelei/svg?seed=Rachel&backgroundColor=b6e3f4" },
+  { id: "EXAVITQu4vr4xnSDxMaL", name: "Sarah", gender: "Female", avatar: "https://api.dicebear.com/9.x/lorelei/svg?seed=Sarah&backgroundColor=ffd5dc" },
+  { id: "pFZP5JQG7iQjIQuC4Bku", name: "Lily", gender: "Female", avatar: "https://api.dicebear.com/9.x/lorelei/svg?seed=Lily&backgroundColor=d1d4f9" },
+  { id: "nPczCjzI2devNBz1zQrb", name: "Brian", gender: "Male", avatar: "https://api.dicebear.com/9.x/lorelei/svg?seed=Brian&backgroundColor=c0aede" },
+  { id: "JBFqnCBsd6RMkjVDRZzb", name: "George", gender: "Male", avatar: "https://api.dicebear.com/9.x/lorelei/svg?seed=George&backgroundColor=ffdfbf" },
 ] as const;
 
 interface VoiceSelectorProps {
@@ -87,23 +87,13 @@ export default function VoiceSelector({ value, onChange }: VoiceSelectorProps) {
               }`}
             >
               <div className="flex items-center gap-3">
-                <div
-                  className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium ${
-                    isSelected
-                      ? "bg-indigo-100 text-indigo-700"
-                      : "bg-gray-100 text-gray-600"
+                <img
+                  src={voice.avatar}
+                  alt={voice.name}
+                  className={`h-10 w-10 rounded-full border-2 ${
+                    isSelected ? "border-indigo-400" : "border-gray-200"
                   }`}
-                >
-                  {voice.gender === "Female" ? (
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" />
-                    </svg>
-                  ) : (
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" />
-                    </svg>
-                  )}
-                </div>
+                />
                 <div>
                   <p className={`text-sm font-medium ${isSelected ? "text-indigo-900" : "text-gray-900"}`}>
                     {voice.name}
