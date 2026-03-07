@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getProfileAccess } from "@/lib/access";
 
 export async function GET(
   _req: NextRequest,
@@ -12,11 +13,8 @@ export async function GET(
 
   const { id } = await params;
 
-  const profile = await prisma.elderlyProfile.findFirst({
-    where: { id, managerId: user.id },
-  });
-
-  if (!profile)
+  const role = await getProfileAccess(user, id);
+  if (!role)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const caregivers = await prisma.caregiver.findMany({
@@ -37,14 +35,11 @@ export async function POST(
 
   const { id } = await params;
 
-  const profile = await prisma.elderlyProfile.findFirst({
-    where: { id, managerId: user.id },
-  });
-
-  if (!profile)
+  const role = await getProfileAccess(user, id);
+  if (!role)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const { name, phone } = await req.json();
+  const { name, email, phone } = await req.json();
 
   if (!name || !phone) {
     return NextResponse.json(
@@ -53,10 +48,21 @@ export async function POST(
     );
   }
 
+  // If email provided, check if a user already exists with that email
+  let userId: string | null = null;
+  if (email) {
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
+    if (existingUser) userId = existingUser.id;
+  }
+
   const caregiver = await prisma.caregiver.create({
     data: {
       name,
+      email: email || null,
       phone,
+      userId,
       elderlyProfileId: id,
     },
   });

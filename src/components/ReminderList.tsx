@@ -16,7 +16,8 @@ interface Reminder {
   medicationId: string | null;
   medication: Medication | null;
   scheduledTime: string;
-  recurrence: "DAILY" | "SPECIFIC_DAYS";
+  scheduledDate: string | null;
+  recurrence: string;
   daysOfWeek: number[];
   leadTimeMinutes: number;
   active: boolean;
@@ -28,6 +29,20 @@ interface ReminderListProps {
 }
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const RECURRENCE_LABELS: Record<string, string> = {
+  NONE: "One-time",
+  EVERY_1_HOUR: "Every 1 hour",
+  EVERY_4_HOURS: "Every 4 hours",
+  EVERY_6_HOURS: "Every 6 hours",
+  EVERY_8_HOURS: "Every 8 hours",
+  EVERY_12_HOURS: "Every 12 hours",
+  DAILY: "Daily",
+  EVERY_OTHER_DAY: "Every other day",
+  WEEKLY: "Weekly",
+  MONTHLY: "Monthly",
+  SPECIFIC_DAYS: "Specific days",
+};
 
 function formatTime(time: string): string {
   const [h, m] = time.split(":");
@@ -151,16 +166,19 @@ export default function ReminderList({
               </div>
 
               <p className="text-sm text-gray-700">
+                {reminder.scheduledDate && (
+                  <span className="mr-1">{reminder.scheduledDate} &middot;</span>
+                )}
                 {formatTime(reminder.scheduledTime)}
               </p>
 
               <p className="text-xs text-gray-500 mt-0.5">
-                {reminder.recurrence === "DAILY"
-                  ? "Daily"
-                  : reminder.daysOfWeek
+                {reminder.recurrence === "SPECIFIC_DAYS"
+                  ? reminder.daysOfWeek
                       .sort((a, b) => a - b)
                       .map((d) => DAY_LABELS[d])
-                      .join(", ")}
+                      .join(", ")
+                  : RECURRENCE_LABELS[reminder.recurrence] || reminder.recurrence}
               </p>
 
               {reminder.leadTimeMinutes > 0 && (

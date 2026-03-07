@@ -7,6 +7,7 @@ import PhoneVerification from "@/components/PhoneVerification";
 interface Caregiver {
   id: string;
   name: string;
+  email: string | null;
   phone: string;
   phoneVerified: boolean;
 }
@@ -83,6 +84,7 @@ export default function CaregiverList({
         <li key={cg.id} className="flex items-center justify-between py-3">
           <div>
             <p className="text-sm font-medium text-gray-900">{cg.name}</p>
+            {cg.email && <p className="text-xs text-gray-400">{cg.email}</p>}
             <p className="text-sm text-gray-500">{cg.phone}</p>
           </div>
           <div className="flex items-center gap-2">

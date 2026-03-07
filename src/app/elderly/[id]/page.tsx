@@ -37,10 +37,14 @@ interface ElderlyProfile {
   phone: string;
   phoneVerified: boolean;
   language: string;
+  emergencyContact: string | null;
+  emergencyPhone: string | null;
+  emergencyPhoneVerified: boolean;
   createdAt: string;
   caregivers: Caregiver[];
   medications: Medication[];
   reminders: Reminder[];
+  role: "manager" | "caregiver";
 }
 
 export default function ElderlyDetailPage() {
@@ -53,10 +57,24 @@ export default function ElderlyDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [caregiverRefreshKey, setCaregiverRefreshKey] = useState(0);
+  const [deleting, setDeleting] = useState(false);
 
   const refreshCaregivers = useCallback(() => {
     setCaregiverRefreshKey((k) => k + 1);
   }, []);
+
+  async function handleDelete() {
+    if (!confirm(`Are you sure you want to delete ${profile?.name}'s profile? This will remove all their medications, reminders, and caregivers. This action cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      const res = await apiFetch(`/api/elderly/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete profile");
+      router.push("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete");
+      setDeleting(false);
+    }
+  }
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -98,9 +116,15 @@ export default function ElderlyDetailPage() {
   }
 
   const languageLabel = profile.language === "ar" ? "Arabic" : "English";
+  const allVerified = profile.phoneVerified && profile.emergencyPhoneVerified;
 
   return (
     <div className="space-y-8">
+      {!allVerified && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+          <strong>Action required:</strong> Please verify both the elderly phone and emergency contact phone before managing medications, reminders, or caregivers.
+        </div>
+      )}
       <div className="flex items-center gap-4">
         <Link
           href="/dashboard"
@@ -108,7 +132,21 @@ export default function ElderlyDetailPage() {
         >
           &larr; Back
         </Link>
-        <h1 className="text-xl font-bold text-gray-900">{profile.name}</h1>
+        <h1 className="text-xl font-bold text-gray-900 flex-1">{profile.name}</h1>
+        {profile.role === "caregiver" && (
+          <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+            Caregiver
+          </span>
+        )}
+        {profile.role === "manager" && (
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {deleting ? "Deleting..." : "Delete Profile"}
+          </button>
+        )}
       </div>
         {/* Profile Info */}
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -147,11 +185,38 @@ export default function ElderlyDetailPage() {
                 {new Date(profile.createdAt).toLocaleDateString()}
               </dd>
             </div>
+            {profile.emergencyContact && (
+              <div>
+                <dt className="text-sm font-medium text-gray-500">Emergency Contact</dt>
+                <dd className="mt-1 text-sm text-gray-900">
+                  {profile.emergencyContact}
+                </dd>
+              </div>
+            )}
+            {profile.emergencyPhone && (
+              <div>
+                <dt className="text-sm font-medium text-gray-500">Emergency Phone</dt>
+                <dd className="mt-1 flex items-center gap-2 text-sm text-gray-900">
+                  {profile.emergencyPhone}
+                  <PhoneVerification
+                    phone={profile.emergencyPhone}
+                    verified={profile.emergencyPhoneVerified}
+                    type="emergency"
+                    entityId={profile.id}
+                    onVerified={() =>
+                      setProfile((prev) =>
+                        prev ? { ...prev, emergencyPhoneVerified: true } : prev
+                      )
+                    }
+                  />
+                </dd>
+              </div>
+            )}
           </dl>
         </section>
 
         {/* Caregivers */}
-        <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className={`rounded-xl border border-gray-200 bg-white p-6 shadow-sm ${!allVerified ? "opacity-50 pointer-events-none" : ""}`}>
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
             Caregivers
           </h2>
@@ -171,7 +236,7 @@ export default function ElderlyDetailPage() {
         </section>
 
         {/* Medications */}
-        <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className={`rounded-xl border border-gray-200 bg-white p-6 shadow-sm ${!allVerified ? "opacity-50 pointer-events-none" : ""}`}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">
               Medications
@@ -182,7 +247,9 @@ export default function ElderlyDetailPage() {
               </span>
               <Link
                 href={`/elderly/${id}/reminders`}
-                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+                className={`rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition-colors ${allVerified ? "hover:bg-indigo-700" : "pointer-events-none opacity-50"}`}
+                aria-disabled={!allVerified}
+                tabIndex={!allVerified ? -1 : undefined}
               >
                 Manage Medications &amp; Reminders
               </Link>
@@ -214,7 +281,7 @@ export default function ElderlyDetailPage() {
         </section>
 
         {/* Reminders */}
-        <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className={`rounded-xl border border-gray-200 bg-white p-6 shadow-sm ${!allVerified ? "opacity-50 pointer-events-none" : ""}`}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Reminders</h2>
             <div className="flex items-center gap-3">
@@ -223,7 +290,9 @@ export default function ElderlyDetailPage() {
               </span>
               <Link
                 href={`/elderly/${id}/logs`}
-                className="rounded-lg border border-indigo-600 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 transition-colors"
+                className={`rounded-lg border border-indigo-600 px-3 py-1.5 text-sm font-medium text-indigo-600 transition-colors ${allVerified ? "hover:bg-indigo-50" : "pointer-events-none opacity-50"}`}
+                aria-disabled={!allVerified}
+                tabIndex={!allVerified ? -1 : undefined}
               >
                 View Call History
               </Link>

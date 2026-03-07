@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getProfileAccess } from "@/lib/access";
 
 export async function GET(
   _req: NextRequest,
@@ -12,11 +13,8 @@ export async function GET(
 
   const { id } = await params;
 
-  const profile = await prisma.elderlyProfile.findFirst({
-    where: { id, managerId: user.id },
-  });
-
-  if (!profile)
+  const role = await getProfileAccess(user, id);
+  if (!role)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const medications = await prisma.medication.findMany({
@@ -37,14 +35,11 @@ export async function POST(
 
   const { id } = await params;
 
-  const profile = await prisma.elderlyProfile.findFirst({
-    where: { id, managerId: user.id },
-  });
-
-  if (!profile)
+  const role = await getProfileAccess(user, id);
+  if (!role)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const { name, dosage, instructions } = await req.json();
+  const { name, dosage, instructions, scheduledTime, recurrence } = await req.json();
 
   if (!name) {
     return NextResponse.json(
@@ -61,6 +56,21 @@ export async function POST(
       elderlyProfileId: id,
     },
   });
+
+  // Auto-create a linked reminder for this medication
+  if (scheduledTime) {
+    await prisma.reminder.create({
+      data: {
+        type: "MEDICATION",
+        title: name,
+        description: dosage ? `Dosage: ${dosage}` : null,
+        medicationId: medication.id,
+        scheduledTime,
+        recurrence: recurrence || "DAILY",
+        elderlyProfileId: id,
+      },
+    });
+  }
 
   return NextResponse.json(medication, { status: 201 });
 }

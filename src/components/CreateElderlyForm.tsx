@@ -15,6 +15,8 @@ export default function CreateElderlyForm({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [language, setLanguage] = useState("en");
+  const [emergencyContact, setEmergencyContact] = useState("");
+  const [emergencyPhone, setEmergencyPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -27,12 +29,19 @@ export default function CreateElderlyForm({
       const res = await apiFetch("/api/elderly", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, phone, language }),
+        body: JSON.stringify({ name, phone, language, emergencyContact, emergencyPhone }),
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to create profile");
+        const text = await res.text();
+        let errorMsg = "Failed to create profile";
+        try {
+          const data = JSON.parse(text);
+          errorMsg = data.error || errorMsg;
+        } catch {
+          errorMsg = text || errorMsg;
+        }
+        throw new Error(errorMsg);
       }
 
       onSuccess();
@@ -83,7 +92,7 @@ export default function CreateElderlyForm({
           </label>
           <input
             id="phone"
-            type="tel"
+            type="text"
             required
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
@@ -108,6 +117,42 @@ export default function CreateElderlyForm({
             <option value="en">English</option>
             <option value="ar">Arabic</option>
           </select>
+        </div>
+
+        <div>
+          <label
+            htmlFor="emergencyContact"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Emergency Contact Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            id="emergencyContact"
+            type="text"
+            required
+            value={emergencyContact}
+            onChange={(e) => setEmergencyContact(e.target.value)}
+            placeholder="Contact person name"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="emergencyPhone"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Emergency Contact Phone <span className="text-red-500">*</span>
+          </label>
+          <input
+            id="emergencyPhone"
+            type="text"
+            required
+            value={emergencyPhone}
+            onChange={(e) => setEmergencyPhone(e.target.value)}
+            placeholder="+1 (555) 987-6543"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
         </div>
 
         <div className="flex gap-3 pt-2">

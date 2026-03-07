@@ -20,7 +20,8 @@ interface ElderlyProfile {
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [profiles, setProfiles] = useState<ElderlyProfile[]>([]);
+  const [managedProfiles, setManagedProfiles] = useState<ElderlyProfile[]>([]);
+  const [caregivingProfiles, setCaregivingProfiles] = useState<ElderlyProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
 
@@ -29,7 +30,8 @@ export default function DashboardPage() {
       const res = await apiFetch("/api/elderly");
       if (res.ok) {
         const data = await res.json();
-        setProfiles(data);
+        setManagedProfiles(data.managed);
+        setCaregivingProfiles(data.caregiving);
       }
     } catch {
       // silently fail
@@ -55,6 +57,8 @@ export default function DashboardPage() {
       </div>
     );
   }
+
+  const hasNoProfiles = managedProfiles.length === 0 && caregivingProfiles.length === 0;
 
   return (
     <>
@@ -91,7 +95,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-center py-20">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
           </div>
-        ) : profiles.length === 0 ? (
+        ) : hasNoProfiles ? (
           <div className="rounded-xl border-2 border-dashed border-gray-300 py-16 text-center">
             <svg
               className="mx-auto h-12 w-12 text-gray-400"
@@ -122,18 +126,46 @@ export default function DashboardPage() {
             )}
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {profiles.map((profile) => (
-              <ElderlyProfileCard
-                key={profile.id}
-                id={profile.id}
-                name={profile.name}
-                phone={profile.phone}
-                phoneVerified={profile.phoneVerified}
-                caregiverCount={profile.caregivers.length}
-                reminderCount={profile._count.reminders}
-              />
-            ))}
+          <div className="space-y-8">
+            {/* Managed profiles */}
+            {managedProfiles.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">My Profiles</h3>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {managedProfiles.map((profile) => (
+                    <ElderlyProfileCard
+                      key={profile.id}
+                      id={profile.id}
+                      name={profile.name}
+                      phone={profile.phone}
+                      phoneVerified={profile.phoneVerified}
+                      caregiverCount={profile.caregivers.length}
+                      reminderCount={profile._count.reminders}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Caregiving profiles */}
+            {caregivingProfiles.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Caregiving For</h3>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {caregivingProfiles.map((profile) => (
+                    <ElderlyProfileCard
+                      key={profile.id}
+                      id={profile.id}
+                      name={profile.name}
+                      phone={profile.phone}
+                      phoneVerified={profile.phoneVerified}
+                      caregiverCount={profile.caregivers.length}
+                      reminderCount={profile._count.reminders}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
     </>

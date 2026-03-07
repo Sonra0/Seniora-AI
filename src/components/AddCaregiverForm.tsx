@@ -13,6 +13,7 @@ export default function AddCaregiverForm({
   onSuccess,
 }: AddCaregiverFormProps) {
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -28,7 +29,7 @@ export default function AddCaregiverForm({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, phone }),
+          body: JSON.stringify({ name, email: email || null, phone }),
         }
       );
 
@@ -38,6 +39,7 @@ export default function AddCaregiverForm({
       }
 
       setName("");
+      setEmail("");
       setPhone("");
       onSuccess();
     } catch (err) {
@@ -50,24 +52,32 @@ export default function AddCaregiverForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <input
           type="text"
-          placeholder="Caregiver name"
+          placeholder="Caregiver name *"
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
         />
         <input
-          type="tel"
-          placeholder="Phone number"
+          type="email"
+          placeholder="Email (for login access)"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        />
+        <input
+          type="text"
+          placeholder="Phone number *"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           required
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
         />
       </div>
+      <p className="text-xs text-gray-400">If you provide an email, the caregiver can log in to view and manage this profile.</p>
       <button
         type="submit"
         disabled={submitting}

@@ -13,6 +13,8 @@ import AddReminderForm from "@/components/AddReminderForm";
 interface ElderlyProfile {
   id: string;
   name: string;
+  phoneVerified: boolean;
+  emergencyPhoneVerified: boolean;
 }
 
 export default function RemindersPage() {
@@ -46,7 +48,7 @@ export default function RemindersPage() {
           if (!res.ok) throw new Error("Failed to load profile");
           return res.json();
         })
-        .then((data) => setProfile({ id: data.id, name: data.name }))
+        .then((data) => setProfile({ id: data.id, name: data.name, phoneVerified: data.phoneVerified, emergencyPhoneVerified: data.emergencyPhoneVerified }))
         .catch((err) => setError(err.message))
         .finally(() => setLoading(false));
     }
@@ -70,6 +72,31 @@ export default function RemindersPage() {
         >
           Back to Dashboard
         </Link>
+      </div>
+    );
+  }
+
+  const allVerified = profile.phoneVerified && profile.emergencyPhoneVerified;
+
+  if (!allVerified) {
+    return (
+      <div className="space-y-8">
+        <div className="flex items-center gap-4">
+          <Link
+            href={`/elderly/${id}`}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            &larr; Back
+          </Link>
+          <h1 className="text-xl font-bold text-gray-900">
+            Medications &amp; Reminders
+          </h1>
+        </div>
+        <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+          <strong>Verification required:</strong> Please verify both the elderly phone and emergency contact phone on the{" "}
+          <Link href={`/elderly/${id}`} className="underline font-medium">profile page</Link>{" "}
+          before managing medications and reminders.
+        </div>
       </div>
     );
   }
@@ -103,7 +130,10 @@ export default function RemindersPage() {
             </h3>
             <AddMedicationForm
               elderlyProfileId={profile.id}
-              onSuccess={refreshMedications}
+              onSuccess={() => {
+                refreshMedications();
+                refreshReminders();
+              }}
             />
           </div>
         </section>

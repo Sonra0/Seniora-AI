@@ -6,7 +6,7 @@ import { apiFetch } from "@/lib/api";
 interface PhoneVerificationProps {
   phone: string;
   verified: boolean;
-  type: "elderly" | "caregiver";
+  type: "elderly" | "caregiver" | "emergency";
   entityId: string;
   onVerified: () => void;
 }

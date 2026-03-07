@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getProfileAccess } from "@/lib/access";
 
 export async function DELETE(
   _req: NextRequest,
@@ -12,11 +13,8 @@ export async function DELETE(
 
   const { id, caregiverId } = await params;
 
-  const profile = await prisma.elderlyProfile.findFirst({
-    where: { id, managerId: user.id },
-  });
-
-  if (!profile)
+  const role = await getProfileAccess(user, id);
+  if (!role)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   await prisma.caregiver.deleteMany({

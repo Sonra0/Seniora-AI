@@ -24,10 +24,9 @@ export default function AddReminderForm({
   const [description, setDescription] = useState("");
   const [medicationId, setMedicationId] = useState("");
   const [scheduledTime, setScheduledTime] = useState("09:00");
-  const [recurrence, setRecurrence] = useState<"DAILY" | "SPECIFIC_DAYS">(
-    "DAILY"
-  );
+  const [recurrence, setRecurrence] = useState("NONE");
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([]);
+  const [scheduledDate, setScheduledDate] = useState("");
   const [leadTimeMinutes, setLeadTimeMinutes] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -78,6 +77,7 @@ export default function AddReminderForm({
             description: description || null,
             medicationId: type === "MEDICATION" ? medicationId || null : null,
             scheduledTime,
+            scheduledDate: scheduledDate || null,
             recurrence,
             daysOfWeek: recurrence === "SPECIFIC_DAYS" ? daysOfWeek : [],
             leadTimeMinutes,
@@ -96,7 +96,8 @@ export default function AddReminderForm({
       setDescription("");
       setMedicationId("");
       setScheduledTime("09:00");
-      setRecurrence("DAILY");
+      setScheduledDate("");
+      setRecurrence("NONE");
       setDaysOfWeek([]);
       setLeadTimeMinutes(0);
       onSuccess();
@@ -207,8 +208,20 @@ export default function AddReminderForm({
         />
       </div>
 
-      {/* Time and lead time */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {/* Date, Time and lead time */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Date (optional)
+          </label>
+          <input
+            type="date"
+            value={scheduledDate}
+            onChange={(e) => setScheduledDate(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+          <p className="text-xs text-gray-400 mt-0.5">Leave empty for recurring</p>
+        </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">
             Scheduled Time
@@ -238,32 +251,25 @@ export default function AddReminderForm({
       {/* Recurrence */}
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-1">
-          Recurrence
+          Repeat
         </label>
-        <div className="flex gap-4">
-          <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
-            <input
-              type="radio"
-              name="recurrence"
-              value="DAILY"
-              checked={recurrence === "DAILY"}
-              onChange={() => setRecurrence("DAILY")}
-              className="text-indigo-600 focus:ring-indigo-500"
-            />
-            Daily
-          </label>
-          <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
-            <input
-              type="radio"
-              name="recurrence"
-              value="SPECIFIC_DAYS"
-              checked={recurrence === "SPECIFIC_DAYS"}
-              onChange={() => setRecurrence("SPECIFIC_DAYS")}
-              className="text-indigo-600 focus:ring-indigo-500"
-            />
-            Specific Days
-          </label>
-        </div>
+        <select
+          value={recurrence}
+          onChange={(e) => setRecurrence(e.target.value)}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        >
+          <option value="NONE">No repeat (one-time)</option>
+          <option value="EVERY_1_HOUR">Every 1 hour</option>
+          <option value="EVERY_4_HOURS">Every 4 hours</option>
+          <option value="EVERY_6_HOURS">Every 6 hours</option>
+          <option value="EVERY_8_HOURS">Every 8 hours</option>
+          <option value="EVERY_12_HOURS">Every 12 hours</option>
+          <option value="DAILY">Every day</option>
+          <option value="EVERY_OTHER_DAY">Every other day</option>
+          <option value="WEEKLY">Every week</option>
+          <option value="MONTHLY">Every month</option>
+          <option value="SPECIFIC_DAYS">Specific days</option>
+        </select>
       </div>
 
       {/* Day checkboxes */}

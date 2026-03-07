@@ -14,27 +14,34 @@ model User {
   name            String?
   createdAt       DateTime         @default(now())
   elderlyProfiles ElderlyProfile[]
+  caregiverLinks  Caregiver[]
 }
 
 model ElderlyProfile {
-  id            String       @id @default(cuid())
-  name          String
-  phone         String
-  phoneVerified Boolean      @default(false)
-  language      String       @default("en")
-  managerId     String
-  manager       User         @relation(fields: [managerId], references: [id], onDelete: Cascade)
-  caregivers    Caregiver[]
-  medications   Medication[]
-  reminders     Reminder[]
-  createdAt     DateTime     @default(now())
+  id               String       @id @default(cuid())
+  name             String
+  phone            String
+  phoneVerified    Boolean      @default(false)
+  language         String       @default("en")
+  emergencyContact       String?
+  emergencyPhone         String?
+  emergencyPhoneVerified Boolean      @default(false)
+  managerId              String
+  manager          User         @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  caregivers       Caregiver[]
+  medications      Medication[]
+  reminders        Reminder[]
+  createdAt        DateTime     @default(now())
 }
 
 model Caregiver {
   id               String         @id @default(cuid())
   name             String
+  email            String?
   phone            String
   phoneVerified    Boolean        @default(false)
+  userId           String?
+  user             User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
   elderlyProfileId String
   elderlyProfile   ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
   createdAt        DateTime       @default(now())
@@ -57,7 +64,16 @@ enum ReminderType {
 }
 
 enum Recurrence {
+  NONE
+  EVERY_1_HOUR
+  EVERY_4_HOURS
+  EVERY_6_HOURS
+  EVERY_8_HOURS
+  EVERY_12_HOURS
   DAILY
+  EVERY_OTHER_DAY
+  WEEKLY
+  MONTHLY
   SPECIFIC_DAYS
 }
 
@@ -71,6 +87,7 @@ model Reminder {
   elderlyProfileId String
   elderlyProfile   ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
   scheduledTime    String
+  scheduledDate    String?
   recurrence       Recurrence     @default(DAILY)
   daysOfWeek       Int[]
   leadTimeMinutes  Int            @default(0)
@@ -92,6 +109,7 @@ model ReminderLog {
   reminderId    String
   reminder      Reminder   @relation(fields: [reminderId], references: [id], onDelete: Cascade)
   status        CallStatus @default(PENDING)
+  attemptNumber Int        @default(1)
   calledAt      DateTime?
   respondedAt   DateTime?
   audioUrl      String?

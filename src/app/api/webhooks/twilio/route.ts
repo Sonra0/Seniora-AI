@@ -14,10 +14,17 @@ export async function POST(req: NextRequest) {
   }
 
   if (digits === "1") {
-    await prisma.reminderLog.update({
+    const log = await prisma.reminderLog.update({
       where: { id: logId },
       data: { status: "CONFIRMED", respondedAt: new Date() },
     });
+
+    // Deactivate the reminder so no further retries happen
+    await prisma.reminder.update({
+      where: { id: log.reminderId },
+      data: { active: false },
+    });
+
     return new NextResponse(
       "<Response><Say>Thank you! Your confirmation has been recorded. Take care!</Say></Response>",
       { headers: { "Content-Type": "text/xml" } }

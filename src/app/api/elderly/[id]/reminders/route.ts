@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getProfileAccess } from "@/lib/access";
 
 export async function GET(
   _req: NextRequest,
@@ -12,17 +13,14 @@ export async function GET(
 
   const { id } = await params;
 
-  const profile = await prisma.elderlyProfile.findFirst({
-    where: { id, managerId: user.id },
-  });
-
-  if (!profile)
+  const role = await getProfileAccess(user, id);
+  if (!role)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const reminders = await prisma.reminder.findMany({
     where: { elderlyProfileId: id },
     include: { medication: true },
-    orderBy: { scheduledTime: "asc" },
+    orderBy: [{ active: "desc" }, { scheduledTime: "asc" }],
   });
 
   return NextResponse.json(reminders);
@@ -38,11 +36,8 @@ export async function POST(
 
   const { id } = await params;
 
-  const profile = await prisma.elderlyProfile.findFirst({
-    where: { id, managerId: user.id },
-  });
-
-  if (!profile)
+  const role = await getProfileAccess(user, id);
+  if (!role)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const {
@@ -51,6 +46,7 @@ export async function POST(
     description,
     medicationId,
     scheduledTime,
+    scheduledDate,
     recurrence,
     daysOfWeek,
     leadTimeMinutes,
@@ -78,6 +74,7 @@ export async function POST(
       description: description || null,
       medicationId: medicationId || null,
       scheduledTime,
+      scheduledDate: scheduledDate || null,
       recurrence: recurrence || "DAILY",
       daysOfWeek: daysOfWeek || [],
       leadTimeMinutes: leadTimeMinutes ?? 0,

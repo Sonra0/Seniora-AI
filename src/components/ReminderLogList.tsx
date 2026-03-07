@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 interface ReminderLog {
   id: string;
   status: string;
+  attemptNumber: number;
   calledAt: string | null;
   respondedAt: string | null;
   createdAt: string;
@@ -95,6 +96,9 @@ export default function ReminderLogList({
               Reminder
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              Attempt
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               Status
             </th>
           </tr>
@@ -108,10 +112,13 @@ export default function ReminderLogList({
             return (
               <tr key={log.id} className="hover:bg-gray-50">
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
-                  {formatDateTime(log.createdAt)}
+                  {formatDateTime(log.calledAt || log.createdAt)}
                 </td>
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">
                   {log.reminder.title}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-600">
+                  {log.attemptNumber} / 3
                 </td>
                 <td className="px-4 py-3">
                   <span

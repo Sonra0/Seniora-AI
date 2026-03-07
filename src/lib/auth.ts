@@ -22,6 +22,12 @@ export async function getCurrentUser() {
       },
     });
 
+    // Auto-link any caregiver records that match this email
+    await prisma.caregiver.updateMany({
+      where: { email: decoded.email!, userId: null },
+      data: { userId: user.id },
+    });
+
     return user;
   } catch {
     return null;

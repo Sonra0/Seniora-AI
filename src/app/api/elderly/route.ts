@@ -7,12 +7,32 @@ export async function GET() {
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const profiles = await prisma.elderlyProfile.findMany({
+  // Get profiles the user manages
+  const managedProfiles = await prisma.elderlyProfile.findMany({
     where: { managerId: user.id },
     include: { caregivers: true, _count: { select: { reminders: true } } },
   });
 
-  return NextResponse.json(profiles);
+  // Get profiles the user is a caregiver for
+  const caregiverLinks = await prisma.caregiver.findMany({
+    where: { userId: user.id },
+    select: { elderlyProfileId: true },
+  });
+  const caregiverProfileIds = caregiverLinks
+    .map((c) => c.elderlyProfileId)
+    .filter((id) => !managedProfiles.some((p) => p.id === id));
+
+  const caregiverProfiles = caregiverProfileIds.length > 0
+    ? await prisma.elderlyProfile.findMany({
+        where: { id: { in: caregiverProfileIds } },
+        include: { caregivers: true, _count: { select: { reminders: true } } },
+      })
+    : [];
+
+  return NextResponse.json({
+    managed: managedProfiles,
+    caregiving: caregiverProfiles,
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -20,7 +40,7 @@ export async function POST(req: NextRequest) {
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { name, phone, language } = await req.json();
+  const { name, phone, language, emergencyContact, emergencyPhone } = await req.json();
 
   if (!name || !phone) {
     return NextResponse.json(
@@ -29,9 +49,31 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const profile = await prisma.elderlyProfile.create({
-    data: { name, phone, language: language || "en", managerId: user.id },
-  });
+  if (!emergencyContact || !emergencyPhone) {
+    return NextResponse.json(
+      { error: "Emergency contact name and phone are required" },
+      { status: 400 }
+    );
+  }
 
-  return NextResponse.json(profile, { status: 201 });
+  try {
+    const profile = await prisma.elderlyProfile.create({
+      data: {
+        name,
+        phone,
+        language: language || "en",
+        emergencyContact,
+        emergencyPhone,
+        managerId: user.id,
+      },
+    });
+
+    return NextResponse.json(profile, { status: 201 });
+  } catch (err) {
+    console.error("Failed to create elderly profile:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to create profile" },
+      { status: 500 }
+    );
+  }
 }

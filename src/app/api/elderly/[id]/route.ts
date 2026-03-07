@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getProfileAccess } from "@/lib/access";
 
 export async function GET(
   _req: NextRequest,
@@ -12,15 +13,19 @@ export async function GET(
 
   const { id } = await params;
 
-  const profile = await prisma.elderlyProfile.findFirst({
-    where: { id, managerId: user.id },
+  const role = await getProfileAccess(user, id);
+  if (!role)
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const profile = await prisma.elderlyProfile.findUnique({
+    where: { id },
     include: { caregivers: true, medications: true, reminders: true },
   });
 
   if (!profile)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  return NextResponse.json(profile);
+  return NextResponse.json({ ...profile, role });
 }
 
 export async function PUT(
@@ -32,10 +37,14 @@ export async function PUT(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+  const role = await getProfileAccess(user, id);
+  if (!role)
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+
   const data = await req.json();
 
-  const profile = await prisma.elderlyProfile.updateMany({
-    where: { id, managerId: user.id },
+  const profile = await prisma.elderlyProfile.update({
+    where: { id },
     data,
   });
 
@@ -52,9 +61,14 @@ export async function DELETE(
 
   const { id } = await params;
 
-  await prisma.elderlyProfile.deleteMany({
+  // Only managers can delete profiles
+  const profile = await prisma.elderlyProfile.findFirst({
     where: { id, managerId: user.id },
   });
+  if (!profile)
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  await prisma.elderlyProfile.delete({ where: { id } });
 
   return NextResponse.json({ success: true });
 }
