@@ -51,7 +51,7 @@ export async function executeReminderCall(reminderId: string, attemptNumber: num
       const audioFileName = `reminder-${log.id}.mp3`;
       const audioPath = path.join(audioDir, audioFileName);
       await writeFile(audioPath, audioBuffer);
-      audioUrl = `${process.env.NEXT_PUBLIC_APP_URL}/audio/${audioFileName}`;
+      audioUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/audio/${audioFileName}`;
 
       twiml = `<Response>
         <Play>${audioUrl}</Play>
