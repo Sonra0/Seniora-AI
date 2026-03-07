@@ -1,9 +1,11 @@
 "use client";
 
 import { useUser } from "@auth0/nextjs-auth0/client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import CaregiverList from "@/components/CaregiverList";
+import AddCaregiverForm from "@/components/AddCaregiverForm";
 
 interface Caregiver {
   id: string;
@@ -48,6 +50,11 @@ export default function ElderlyDetailPage() {
   const [profile, setProfile] = useState<ElderlyProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [caregiverRefreshKey, setCaregiverRefreshKey] = useState(0);
+
+  const refreshCaregivers = useCallback(() => {
+    setCaregiverRefreshKey((k) => k + 1);
+  }, []);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -145,33 +152,22 @@ export default function ElderlyDetailPage() {
 
         {/* Caregivers */}
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Caregivers</h2>
-            <span className="text-sm text-gray-500">
-              {profile.caregivers.length} total
-            </span>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            Caregivers
+          </h2>
+          <CaregiverList
+            elderlyProfileId={profile.id}
+            refreshKey={caregiverRefreshKey}
+          />
+          <div className="mt-4 border-t border-gray-100 pt-4">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">
+              Add a caregiver
+            </h3>
+            <AddCaregiverForm
+              elderlyProfileId={profile.id}
+              onSuccess={refreshCaregivers}
+            />
           </div>
-          {profile.caregivers.length === 0 ? (
-            <p className="text-sm text-gray-500">No caregivers added yet.</p>
-          ) : (
-            <ul className="divide-y divide-gray-100">
-              {profile.caregivers.map((cg) => (
-                <li key={cg.id} className="flex items-center justify-between py-3">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {cg.name}
-                    </p>
-                    <p className="text-sm text-gray-500">{cg.phone}</p>
-                  </div>
-                  {cg.phoneVerified && (
-                    <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                      Verified
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
         </section>
 
         {/* Medications */}
