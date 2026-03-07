@@ -1,3 +1,4 @@
+import "dotenv/config";
 import cron from "node-cron";
 import { prisma } from "../lib/prisma";
 import { executeReminderCall } from "../lib/voice-call";

@@ -67,7 +67,7 @@ export default function AddReminderForm({
     setError("");
 
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/elderly/${elderlyProfileId}/reminders`,
         {
           method: "POST",

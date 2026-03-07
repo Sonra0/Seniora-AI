@@ -9,7 +9,7 @@ export async function generateReminderScript(context: {
   language: string;
   timeOfDay: string;
 }): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
   const prompt = `You are a caring, warm assistant calling an elderly person named ${context.elderlyName}.
 Generate a short, clear, empathetic phone reminder in ${context.language === "ar" ? "Arabic" : "English"}.
