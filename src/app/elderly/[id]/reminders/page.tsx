@@ -6,6 +6,8 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import MedicationList from "@/components/MedicationList";
 import AddMedicationForm from "@/components/AddMedicationForm";
+import ReminderList from "@/components/ReminderList";
+import AddReminderForm from "@/components/AddReminderForm";
 
 interface ElderlyProfile {
   id: string;
@@ -22,9 +24,14 @@ export default function RemindersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [medicationRefreshKey, setMedicationRefreshKey] = useState(0);
+  const [reminderRefreshKey, setReminderRefreshKey] = useState(0);
 
   const refreshMedications = useCallback(() => {
     setMedicationRefreshKey((k) => k + 1);
+  }, []);
+
+  const refreshReminders = useCallback(() => {
+    setReminderRefreshKey((k) => k + 1);
   }, []);
 
   useEffect(() => {
@@ -104,15 +111,24 @@ export default function RemindersPage() {
           </div>
         </section>
 
-        {/* Reminders Section (placeholder for Task 8) */}
+        {/* Reminders Section */}
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
             Reminders
           </h2>
-          <p className="text-sm text-gray-500">
-            Reminders will be available soon. You will be able to schedule
-            automated voice call reminders for medications and custom tasks.
-          </p>
+          <ReminderList
+            elderlyProfileId={profile.id}
+            refreshKey={reminderRefreshKey}
+          />
+          <div className="mt-4 border-t border-gray-100 pt-4">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">
+              Add a reminder
+            </h3>
+            <AddReminderForm
+              elderlyProfileId={profile.id}
+              onSuccess={refreshReminders}
+            />
+          </div>
         </section>
       </main>
     </div>
