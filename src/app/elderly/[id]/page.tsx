@@ -179,9 +179,17 @@ export default function ElderlyDetailPage() {
             <h2 className="text-lg font-semibold text-gray-900">
               Medications
             </h2>
-            <span className="text-sm text-gray-500">
-              {profile.medications.length} total
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-500">
+                {profile.medications.length} total
+              </span>
+              <Link
+                href={`/elderly/${id}/reminders`}
+                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+              >
+                Manage Medications &amp; Reminders
+              </Link>
+            </div>
           </div>
           {profile.medications.length === 0 ? (
             <p className="text-sm text-gray-500">No medications added yet.</p>
