@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id              String           @id @default(cuid())
+  auth0Id         String           @unique
+  email           String           @unique
+  name            String?
+  createdAt       DateTime         @default(now())
+  elderlyProfiles ElderlyProfile[]
+}
+
+model ElderlyProfile {
+  id            String       @id @default(cuid())
+  name          String
+  phone         String
+  phoneVerified Boolean      @default(false)
+  language      String       @default("en")
+  managerId     String
+  manager       User         @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  caregivers    Caregiver[]
+  medications   Medication[]
+  reminders     Reminder[]
+  createdAt     DateTime     @default(now())
+}
+
+model Caregiver {
+  id               String         @id @default(cuid())
+  name             String
+  phone            String
+  phoneVerified    Boolean        @default(false)
+  elderlyProfileId String
+  elderlyProfile   ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+  createdAt        DateTime       @default(now())
+}
+
+model Medication {
+  id               String         @id @default(cuid())
+  name             String
+  dosage           String?
+  instructions     String?
+  elderlyProfileId String
+  elderlyProfile   ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+  reminders        Reminder[]
+  createdAt        DateTime       @default(now())
+}
+
+enum ReminderType {
+  MEDICATION
+  CUSTOM
+}
+
+enum Recurrence {
+  DAILY
+  SPECIFIC_DAYS
+}
+
+model Reminder {
+  id               String         @id @default(cuid())
+  type             ReminderType
+  title            String
+  description      String?
+  medicationId     String?
+  medication       Medication?    @relation(fields: [medicationId], references: [id], onDelete: SetNull)
+  elderlyProfileId String
+  elderlyProfile   ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+  scheduledTime    String
+  recurrence       Recurrence     @default(DAILY)
+  daysOfWeek       Int[]
+  leadTimeMinutes  Int            @default(0)
+  active           Boolean        @default(true)
+  logs             ReminderLog[]
+  createdAt        DateTime       @default(now())
+}
+
+enum CallStatus {
+  PENDING
+  CALLING
+  CONFIRMED
+  NO_ANSWER
+  FAILED
+}
+
+model ReminderLog {
+  id            String     @id @default(cuid())
+  reminderId    String
+  reminder      Reminder   @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+  status        CallStatus @default(PENDING)
+  calledAt      DateTime?
+  respondedAt   DateTime?
+  audioUrl      String?
+  twilioCallSid String?
+  createdAt     DateTime   @default(now())
+}
