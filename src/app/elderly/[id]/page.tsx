@@ -41,6 +41,7 @@ interface ElderlyProfile {
   emergencyContact: string | null;
   emergencyPhone: string | null;
   emergencyPhoneVerified: boolean;
+  timezone: string;
   createdAt: string;
   caregivers: Caregiver[];
   medications: Medication[];
@@ -234,6 +235,10 @@ export default function ElderlyDetailPage() {
             <div>
               <dt className="text-sm font-medium text-gray-500">Language</dt>
               <dd className="mt-1 text-sm text-gray-900">{languageLabel}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Timezone</dt>
+              <dd className="mt-1 text-sm text-gray-900">{profile.timezone?.replace(/_/g, " ") || "UTC"}</dd>
             </div>
             <div>
               <dt className="text-sm font-medium text-gray-500">Created</dt>

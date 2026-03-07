@@ -25,6 +25,7 @@ model ElderlyProfile {
   phone            String
   phoneVerified    Boolean      @default(false)
   language         String       @default("en")
+  timezone         String       @default("UTC")
   emergencyContact       String?
   emergencyPhone         String?
   emergencyPhoneVerified Boolean      @default(false)

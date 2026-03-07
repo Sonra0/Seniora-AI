@@ -15,6 +15,9 @@ export default function CreateElderlyForm({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [language, setLanguage] = useState("en");
+  const [timezone, setTimezone] = useState(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+  );
   const [emergencyContact, setEmergencyContact] = useState("");
   const [emergencyPhone, setEmergencyPhone] = useState("");
   const [loading, setLoading] = useState(false);
@@ -29,7 +32,7 @@ export default function CreateElderlyForm({
       const res = await apiFetch("/api/elderly", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, phone, language, emergencyContact, emergencyPhone }),
+        body: JSON.stringify({ name, phone, language, timezone, emergencyContact, emergencyPhone }),
       });
 
       if (!res.ok) {
@@ -116,6 +119,27 @@ export default function CreateElderlyForm({
           >
             <option value="en">English</option>
             <option value="ar">Arabic</option>
+          </select>
+        </div>
+
+        <div>
+          <label
+            htmlFor="timezone"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Timezone
+          </label>
+          <select
+            id="timezone"
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          >
+            {Intl.supportedValuesOf("timeZone").map((tz) => (
+              <option key={tz} value={tz}>
+                {tz.replace(/_/g, " ")}
+              </option>
+            ))}
           </select>
         </div>
 

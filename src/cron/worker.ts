@@ -6,47 +6,59 @@ import { executeReminderCall, callEmergencyContact } from "../lib/voice-call";
 const MAX_ATTEMPTS = 3;
 const RETRY_INTERVAL_MINUTES = 5;
 
-function getTimeWindow() {
+function getTimeInTimezone(timezone: string) {
   const now = new Date();
-  const hours = String(now.getHours()).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
+  const formatted = now.toLocaleString("en-US", {
+    timeZone: timezone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  // toLocaleString may return "24:00" as "00:00" — normalize
+  const [h, m] = formatted.split(":").map((s) => s.trim());
+  return `${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
 }
 
-function getDayOfWeek() {
-  return new Date().getDay();
+function getDayOfWeekInTimezone(timezone: string) {
+  const now = new Date();
+  const dayStr = now.toLocaleString("en-US", { timeZone: timezone, weekday: "short" });
+  const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return dayMap[dayStr] ?? now.getDay();
 }
 
-function getTodayDateString() {
+function getTodayDateStringInTimezone(timezone: string) {
   const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  const parts = now.toLocaleDateString("en-CA", { timeZone: timezone }).split("-");
+  return parts.join("-");
+}
+
+function getNowMinutesInTimezone(timezone: string) {
+  const timeStr = getTimeInTimezone(timezone);
+  const [h, m] = timeStr.split(":").map(Number);
+  return h * 60 + m;
 }
 
 async function deactivatePastReminders() {
-  const todayStr = getTodayDateString();
-
-  // Deactivate reminders whose scheduledDate has passed
-  const result = await prisma.reminder.updateMany({
-    where: {
-      active: true,
-      scheduledDate: { not: null, lt: todayStr },
-    },
-    data: { active: false },
+  // Find all active reminders with a scheduledDate
+  const reminders = await prisma.reminder.findMany({
+    where: { active: true, scheduledDate: { not: null } },
+    include: { elderlyProfile: { select: { timezone: true } } },
   });
 
-  if (result.count > 0) {
-    console.log(`Deactivated ${result.count} past-date reminder(s).`);
+  for (const reminder of reminders) {
+    const tz = reminder.elderlyProfile.timezone || "UTC";
+    const todayStr = getTodayDateStringInTimezone(tz);
+    if (reminder.scheduledDate! < todayStr) {
+      await prisma.reminder.update({
+        where: { id: reminder.id },
+        data: { active: false },
+      });
+      console.log(`Deactivated past-date reminder: ${reminder.title}`);
+    }
   }
 }
 
 async function processReminders() {
-  const currentTime = getTimeWindow();
-  const currentDay = getDayOfWeek();
-  const todayStr = getTodayDateString();
-
   const reminders = await prisma.reminder.findMany({
     where: {
       active: true,
@@ -64,6 +76,11 @@ async function processReminders() {
   };
 
   for (const reminder of reminders) {
+    const tz = reminder.elderlyProfile.timezone || "UTC";
+    const currentTime = getTimeInTimezone(tz);
+    const currentDay = getDayOfWeekInTimezone(tz);
+    const todayStr = getTodayDateStringInTimezone(tz);
+
     // If reminder has a specific date, only fire on that date
     if (reminder.scheduledDate && reminder.scheduledDate !== todayStr) continue;
 
@@ -91,8 +108,7 @@ async function processReminders() {
       if (existingLog) continue;
     } else if (intervalHours) {
       // Hour-based intervals: first call at scheduledTime, then repeat every N hours
-      const now = new Date();
-      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const nowMinutes = getNowMinutesInTimezone(tz);
       const startMinutes = h * 60 + m;
 
       // Only fire at or after the scheduled start time
