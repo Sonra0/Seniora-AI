@@ -10,6 +10,7 @@ interface Caregiver {
   email: string | null;
   phone: string;
   phoneVerified: boolean;
+  avatarUrl: string | null;
 }
 
 interface CaregiverListProps {
@@ -82,10 +83,23 @@ export default function CaregiverList({
     <ul className="divide-y divide-gray-100">
       {caregivers.map((cg) => (
         <li key={cg.id} className="flex items-center justify-between py-3">
-          <div>
-            <p className="text-sm font-medium text-gray-900">{cg.name}</p>
-            {cg.email && <p className="text-xs text-gray-400">{cg.email}</p>}
-            <p className="text-sm text-gray-500">{cg.phone}</p>
+          <div className="flex items-center gap-3">
+            {cg.avatarUrl ? (
+              <img
+                src={cg.avatarUrl}
+                alt={cg.name}
+                className="h-9 w-9 rounded-full object-cover border border-gray-200"
+              />
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-500 font-medium text-sm">
+                {cg.name.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div>
+              <p className="text-sm font-medium text-gray-900">{cg.name}</p>
+              {cg.email && <p className="text-xs text-gray-400">{cg.email}</p>}
+              <p className="text-sm text-gray-500">{cg.phone}</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <PhoneVerification

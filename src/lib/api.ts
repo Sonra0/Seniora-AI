@@ -9,7 +9,7 @@ export async function apiFetch(url: string, options: RequestInit = {}) {
     headers: {
       ...options.headers,
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.body && !options.headers?.toString().includes("Content-Type")
+      ...(options.body && !(options.body instanceof FormData) && !options.headers?.toString().includes("Content-Type")
         ? { "Content-Type": "application/json" }
         : {}),
     },

@@ -5,6 +5,7 @@ import Link from "next/link";
 interface ElderlyProfileCardProps {
   id: string;
   name: string;
+  avatarUrl: string | null;
   phone: string;
   phoneVerified: boolean;
   caregiverCount: number;
@@ -14,6 +15,7 @@ interface ElderlyProfileCardProps {
 export default function ElderlyProfileCard({
   id,
   name,
+  avatarUrl,
   phone,
   phoneVerified,
   caregiverCount,
@@ -24,9 +26,17 @@ export default function ElderlyProfileCard({
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 font-semibold text-lg">
-              {name.charAt(0).toUpperCase()}
-            </div>
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={name}
+                className="h-11 w-11 rounded-full object-cover border border-gray-200"
+              />
+            ) : (
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 font-semibold text-lg">
+                {name.charAt(0).toUpperCase()}
+              </div>
+            )}
             <div>
               <h3 className="text-lg font-semibold text-gray-900">{name}</h3>
               <div className="flex items-center gap-1.5 text-sm text-gray-500">

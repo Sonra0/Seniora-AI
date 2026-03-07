@@ -19,10 +19,17 @@ export async function GET(
 
   const caregivers = await prisma.caregiver.findMany({
     where: { elderlyProfileId: id },
+    include: { user: { select: { avatarUrl: true } } },
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json(caregivers);
+  // Flatten user avatar into caregiver object
+  const result = caregivers.map(({ user, ...cg }) => ({
+    ...cg,
+    avatarUrl: user?.avatarUrl || null,
+  }));
+
+  return NextResponse.json(result);
 }
 
 export async function POST(

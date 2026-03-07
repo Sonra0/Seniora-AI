@@ -10,6 +10,7 @@ import CreateElderlyForm from "@/components/CreateElderlyForm";
 interface ElderlyProfile {
   id: string;
   name: string;
+  avatarUrl: string | null;
   phone: string;
   phoneVerified: boolean;
   language: string;
@@ -137,6 +138,7 @@ export default function DashboardPage() {
                       key={profile.id}
                       id={profile.id}
                       name={profile.name}
+                      avatarUrl={profile.avatarUrl}
                       phone={profile.phone}
                       phoneVerified={profile.phoneVerified}
                       caregiverCount={profile.caregivers.length}
@@ -157,6 +159,7 @@ export default function DashboardPage() {
                       key={profile.id}
                       id={profile.id}
                       name={profile.name}
+                      avatarUrl={profile.avatarUrl}
                       phone={profile.phone}
                       phoneVerified={profile.phoneVerified}
                       caregiverCount={profile.caregivers.length}

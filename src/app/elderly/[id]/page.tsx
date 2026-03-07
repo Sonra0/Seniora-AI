@@ -34,6 +34,7 @@ interface Reminder {
 interface ElderlyProfile {
   id: string;
   name: string;
+  avatarUrl: string | null;
   phone: string;
   phoneVerified: boolean;
   language: string;
@@ -58,6 +59,7 @@ export default function ElderlyDetailPage() {
   const [error, setError] = useState("");
   const [caregiverRefreshKey, setCaregiverRefreshKey] = useState(0);
   const [deleting, setDeleting] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const refreshCaregivers = useCallback(() => {
     setCaregiverRefreshKey((k) => k + 1);
@@ -73,6 +75,30 @@ export default function ElderlyDetailPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete");
       setDeleting(false);
+    }
+  }
+
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append("avatar", file);
+      const res = await apiFetch(`/api/elderly/${id}/avatar`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Upload failed");
+      }
+      const { avatarUrl } = await res.json();
+      setProfile((prev) => (prev ? { ...prev, avatarUrl } : prev));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploadingAvatar(false);
     }
   }
 
@@ -132,6 +158,36 @@ export default function ElderlyDetailPage() {
         >
           &larr; Back
         </Link>
+        <label className="relative cursor-pointer group shrink-0">
+          {profile.avatarUrl ? (
+            <img
+              src={profile.avatarUrl}
+              alt={profile.name}
+              className="h-12 w-12 rounded-full object-cover border-2 border-gray-200 group-hover:border-indigo-400 transition-colors"
+            />
+          ) : (
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 font-semibold text-lg border-2 border-transparent group-hover:border-indigo-400 transition-colors">
+              {profile.name.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+            <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
+            </svg>
+          </div>
+          {uploadingAvatar && (
+            <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            </div>
+          )}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={handleAvatarUpload}
+            className="sr-only"
+          />
+        </label>
         <h1 className="text-xl font-bold text-gray-900 flex-1">{profile.name}</h1>
         {profile.role === "caregiver" && (
           <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">

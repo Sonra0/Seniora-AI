@@ -12,6 +12,7 @@ model User {
   firebaseUid     String           @unique
   email           String           @unique
   name            String?
+  avatarUrl       String?
   createdAt       DateTime         @default(now())
   elderlyProfiles ElderlyProfile[]
   caregiverLinks  Caregiver[]
@@ -20,6 +21,7 @@ model User {
 model ElderlyProfile {
   id               String       @id @default(cuid())
   name             String
+  avatarUrl        String?
   phone            String
   phoneVerified    Boolean      @default(false)
   language         String       @default("en")
