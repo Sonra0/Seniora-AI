@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { apiFetch } from "@/lib/api";
+import VoiceSelector from "./VoiceSelector";
 
 interface CreateElderlyFormProps {
   onSuccess: () => void;
@@ -20,6 +21,7 @@ export default function CreateElderlyForm({
   );
   const [emergencyContact, setEmergencyContact] = useState("");
   const [emergencyPhone, setEmergencyPhone] = useState("");
+  const [voiceId, setVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -32,7 +34,7 @@ export default function CreateElderlyForm({
       const res = await apiFetch("/api/elderly", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, phone, language, timezone, emergencyContact, emergencyPhone }),
+        body: JSON.stringify({ name, phone, language, timezone, emergencyContact, emergencyPhone, voiceId }),
       });
 
       if (!res.ok) {
@@ -142,6 +144,8 @@ export default function CreateElderlyForm({
             ))}
           </select>
         </div>
+
+        <VoiceSelector value={voiceId} onChange={setVoiceId} />
 
         <div>
           <label

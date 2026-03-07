@@ -45,7 +45,7 @@ export async function executeReminderCall(reminderId: string, attemptNumber: num
     let audioUrl: string | null = null;
 
     try {
-      const audioBuffer = await textToSpeech(script);
+      const audioBuffer = await textToSpeech(script, reminder.elderlyProfile.voiceId || undefined);
       const audioDir = path.join(process.cwd(), "public", "audio");
       await mkdir(audioDir, { recursive: true });
       const audioFileName = `reminder-${log.id}.mp3`;

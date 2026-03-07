@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { name, phone, language, timezone, emergencyContact, emergencyPhone } = await req.json();
+  const { name, phone, language, timezone, emergencyContact, emergencyPhone, voiceId } = await req.json();
 
   if (!name || !phone) {
     return NextResponse.json(
@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
         phone,
         language: language || "en",
         timezone: timezone || "UTC",
+        voiceId: voiceId || undefined,
         emergencyContact,
         emergencyPhone,
         managerId: user.id,

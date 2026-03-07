@@ -8,6 +8,7 @@ import Link from "next/link";
 import CaregiverList from "@/components/CaregiverList";
 import AddCaregiverForm from "@/components/AddCaregiverForm";
 import PhoneVerification from "@/components/PhoneVerification";
+import VoiceSelector from "@/components/VoiceSelector";
 
 interface Caregiver {
   id: string;
@@ -38,6 +39,7 @@ interface ElderlyProfile {
   phone: string;
   phoneVerified: boolean;
   language: string;
+  voiceId: string | null;
   emergencyContact: string | null;
   emergencyPhone: string | null;
   emergencyPhoneVerified: boolean;
@@ -61,6 +63,7 @@ export default function ElderlyDetailPage() {
   const [caregiverRefreshKey, setCaregiverRefreshKey] = useState(0);
   const [deleting, setDeleting] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [savingVoice, setSavingVoice] = useState(false);
 
   const refreshCaregivers = useCallback(() => {
     setCaregiverRefreshKey((k) => k + 1);
@@ -140,6 +143,23 @@ export default function ElderlyDetailPage() {
         </Link>
       </div>
     );
+  }
+
+  async function handleVoiceChange(voiceId: string) {
+    setSavingVoice(true);
+    try {
+      const res = await apiFetch(`/api/elderly/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voiceId }),
+      });
+      if (!res.ok) throw new Error("Failed to update voice");
+      setProfile((prev) => (prev ? { ...prev, voiceId } : prev));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update voice");
+    } finally {
+      setSavingVoice(false);
+    }
   }
 
   const languageLabel = profile.language === "ar" ? "Arabic" : "English";
@@ -274,6 +294,22 @@ export default function ElderlyDetailPage() {
               </div>
             )}
           </dl>
+        </section>
+
+        {/* Voice Selection */}
+        <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Call Voice
+            </h2>
+            {savingVoice && (
+              <span className="text-xs text-gray-500">Saving...</span>
+            )}
+          </div>
+          <VoiceSelector
+            value={profile.voiceId || "21m00Tcm4TlvDq8ikWAM"}
+            onChange={handleVoiceChange}
+          />
         </section>
 
         {/* Caregivers */}
