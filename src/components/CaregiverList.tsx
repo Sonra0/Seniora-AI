@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import PhoneVerification from "@/components/PhoneVerification";
 
 interface Caregiver {
   id: string;
@@ -84,15 +85,19 @@ export default function CaregiverList({
             <p className="text-sm text-gray-500">{cg.phone}</p>
           </div>
           <div className="flex items-center gap-2">
-            {cg.phoneVerified ? (
-              <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                Verified
-              </span>
-            ) : (
-              <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
-                Unverified
-              </span>
-            )}
+            <PhoneVerification
+              phone={cg.phone}
+              verified={cg.phoneVerified}
+              type="caregiver"
+              entityId={cg.id}
+              onVerified={() =>
+                setCaregivers((prev) =>
+                  prev.map((c) =>
+                    c.id === cg.id ? { ...c, phoneVerified: true } : c
+                  )
+                )
+              }
+            />
             <button
               onClick={() => handleDelete(cg.id)}
               disabled={deletingId === cg.id}

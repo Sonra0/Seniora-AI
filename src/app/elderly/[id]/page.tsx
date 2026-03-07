@@ -6,6 +6,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import CaregiverList from "@/components/CaregiverList";
 import AddCaregiverForm from "@/components/AddCaregiverForm";
+import PhoneVerification from "@/components/PhoneVerification";
 
 interface Caregiver {
   id: string;
@@ -126,15 +127,17 @@ export default function ElderlyDetailPage() {
               <dt className="text-sm font-medium text-gray-500">Phone</dt>
               <dd className="mt-1 flex items-center gap-2 text-sm text-gray-900">
                 {profile.phone}
-                {profile.phoneVerified ? (
-                  <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                    Verified
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
-                    Not verified
-                  </span>
-                )}
+                <PhoneVerification
+                  phone={profile.phone}
+                  verified={profile.phoneVerified}
+                  type="elderly"
+                  entityId={profile.id}
+                  onVerified={() =>
+                    setProfile((prev) =>
+                      prev ? { ...prev, phoneVerified: true } : prev
+                    )
+                  }
+                />
               </dd>
             </div>
             <div>
