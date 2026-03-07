@@ -220,9 +220,17 @@ export default function ElderlyDetailPage() {
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Reminders</h2>
-            <span className="text-sm text-gray-500">
-              {profile.reminders.length} total
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-500">
+                {profile.reminders.length} total
+              </span>
+              <Link
+                href={`/elderly/${id}/logs`}
+                className="rounded-lg border border-indigo-600 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 transition-colors"
+              >
+                View Call History
+              </Link>
+            </div>
           </div>
           {profile.reminders.length === 0 ? (
             <p className="text-sm text-gray-500">No reminders set up yet.</p>
