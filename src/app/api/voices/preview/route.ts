@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
 
   const { voiceId } = await req.json();
 
-  if (!voiceId || !ELEVENLABS_VOICES.some((v) => v.id === voiceId)) {
+  if (!voiceId || typeof voiceId !== "string") {
     return NextResponse.json({ error: "Invalid voice ID" }, { status: 400 });
   }
 

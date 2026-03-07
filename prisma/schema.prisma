@@ -27,6 +27,7 @@ model ElderlyProfile {
   language         String       @default("en")
   timezone         String       @default("UTC")
   voiceId          String       @default("21m00Tcm4TlvDq8ikWAM")
+  customVoiceName  String?
   emergencyContact       String?
   emergencyPhone         String?
   emergencyPhoneVerified Boolean      @default(false)

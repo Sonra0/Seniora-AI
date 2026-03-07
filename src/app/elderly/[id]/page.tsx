@@ -40,6 +40,7 @@ interface ElderlyProfile {
   phoneVerified: boolean;
   language: string;
   voiceId: string | null;
+  customVoiceName: string | null;
   emergencyContact: string | null;
   emergencyPhone: string | null;
   emergencyPhoneVerified: boolean;
@@ -309,6 +310,23 @@ export default function ElderlyDetailPage() {
           <VoiceSelector
             value={profile.voiceId || "21m00Tcm4TlvDq8ikWAM"}
             onChange={handleVoiceChange}
+            customVoiceName={profile.customVoiceName}
+            onClone={async (voiceId, name) => {
+              setSavingVoice(true);
+              try {
+                const res = await apiFetch(`/api/elderly/${id}`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ voiceId, customVoiceName: name }),
+                });
+                if (!res.ok) throw new Error("Failed to save cloned voice");
+                setProfile((prev) => prev ? { ...prev, voiceId, customVoiceName: name } : prev);
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to save");
+              } finally {
+                setSavingVoice(false);
+              }
+            }}
           />
         </section>
 
