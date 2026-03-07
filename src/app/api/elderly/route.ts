@@ -65,7 +65,16 @@ export async function POST(req: NextRequest) {
         emergencyContact,
         emergencyPhone,
         managerId: user.id,
+        caregivers: {
+          create: {
+            name: user.name || user.email,
+            email: user.email,
+            phone: "",
+            userId: user.id,
+          },
+        },
       },
+      include: { caregivers: true },
     });
 
     return NextResponse.json(profile, { status: 201 });
