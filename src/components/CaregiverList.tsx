@@ -26,6 +26,9 @@ export default function CaregiverList({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingPhoneId, setEditingPhoneId] = useState<string | null>(null);
+  const [phoneInput, setPhoneInput] = useState("");
+  const [savingPhone, setSavingPhone] = useState(false);
 
   const fetchCaregivers = useCallback(async () => {
     try {
@@ -46,6 +49,35 @@ export default function CaregiverList({
   useEffect(() => {
     fetchCaregivers();
   }, [fetchCaregivers, refreshKey]);
+
+  const handleSavePhone = async (caregiverId: string) => {
+    if (!phoneInput.trim()) return;
+    setSavingPhone(true);
+    try {
+      const res = await apiFetch(
+        `/api/elderly/${elderlyProfileId}/caregivers/${caregiverId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: phoneInput.trim() }),
+        }
+      );
+      if (!res.ok) throw new Error("Failed to update phone");
+      setCaregivers((prev) =>
+        prev.map((cg) =>
+          cg.id === caregiverId
+            ? { ...cg, phone: phoneInput.trim(), phoneVerified: false }
+            : cg
+        )
+      );
+      setEditingPhoneId(null);
+      setPhoneInput("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update phone");
+    } finally {
+      setSavingPhone(false);
+    }
+  };
 
   const handleDelete = async (caregiverId: string) => {
     setDeletingId(caregiverId);
@@ -98,23 +130,63 @@ export default function CaregiverList({
             <div>
               <p className="text-sm font-medium text-gray-900">{cg.name}</p>
               {cg.email && <p className="text-xs text-gray-400">{cg.email}</p>}
-              <p className="text-sm text-gray-500">{cg.phone}</p>
+              {cg.phone ? (
+                <p className="text-sm text-gray-500">{cg.phone}</p>
+              ) : editingPhoneId === cg.id ? (
+                <div className="flex items-center gap-1 mt-1">
+                  <input
+                    type="tel"
+                    value={phoneInput}
+                    onChange={(e) => setPhoneInput(e.target.value)}
+                    placeholder="+1234567890"
+                    className="w-32 rounded-lg border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                  />
+                  <button
+                    onClick={() => handleSavePhone(cg.id)}
+                    disabled={savingPhone || !phoneInput.trim()}
+                    className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                  >
+                    {savingPhone ? "Saving..." : "Save"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingPhoneId(null);
+                      setPhoneInput("");
+                    }}
+                    className="text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    setEditingPhoneId(cg.id);
+                    setPhoneInput("");
+                  }}
+                  className="mt-1 text-xs text-indigo-600 hover:text-indigo-800"
+                >
+                  + Add phone number
+                </button>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <PhoneVerification
-              phone={cg.phone}
-              verified={cg.phoneVerified}
-              type="caregiver"
-              entityId={cg.id}
-              onVerified={() =>
-                setCaregivers((prev) =>
-                  prev.map((c) =>
-                    c.id === cg.id ? { ...c, phoneVerified: true } : c
+            {cg.phone ? (
+              <PhoneVerification
+                phone={cg.phone}
+                verified={cg.phoneVerified}
+                type="caregiver"
+                entityId={cg.id}
+                onVerified={() =>
+                  setCaregivers((prev) =>
+                    prev.map((c) =>
+                      c.id === cg.id ? { ...c, phoneVerified: true } : c
+                    )
                   )
-                )
-              }
-            />
+                }
+              />
+            ) : null}
             <button
               onClick={() => handleDelete(cg.id)}
               disabled={deletingId === cg.id}
