@@ -247,11 +247,13 @@ async function processEmergencyCalls() {
     await callEmergencyContact(profileId);
     calledProfiles.add(profileId);
 
-    // Deactivate the reminder since all attempts are exhausted
-    await prisma.reminder.update({
-      where: { id: log.reminderId },
-      data: { active: false },
-    });
+    // Only deactivate one-time reminders; recurring ones should keep firing
+    if (log.reminder.recurrence === "NONE") {
+      await prisma.reminder.update({
+        where: { id: log.reminderId },
+        data: { active: false },
+      });
+    }
   }
 }
 

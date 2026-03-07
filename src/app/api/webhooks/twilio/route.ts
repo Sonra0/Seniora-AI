@@ -19,11 +19,16 @@ export async function POST(req: NextRequest) {
       data: { status: "CONFIRMED", respondedAt: new Date() },
     });
 
-    // Deactivate the reminder so no further retries happen
-    await prisma.reminder.update({
+    // Only deactivate one-time reminders; recurring ones should keep firing
+    const reminder = await prisma.reminder.findUnique({
       where: { id: log.reminderId },
-      data: { active: false },
     });
+    if (reminder && reminder.recurrence === "NONE") {
+      await prisma.reminder.update({
+        where: { id: log.reminderId },
+        data: { active: false },
+      });
+    }
 
     return new NextResponse(
       "<Response><Say>Thank you! Your confirmation has been recorded. Take care!</Say></Response>",
