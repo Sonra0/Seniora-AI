@@ -11,8 +11,8 @@ module.exports = {
     },
     {
       name: "seniora-cron",
-      script: "npx",
-      args: "tsx src/cron/worker.ts",
+      script: "node_modules/.bin/tsx",
+      args: "src/cron/worker.ts",
       env: {
         NODE_ENV: "production",
       },

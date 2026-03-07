@@ -14,6 +14,7 @@ echo "Building..."
 npm run build
 
 echo "Restarting services..."
-pm2 restart ecosystem.config.js
+pm2 delete all || true
+pm2 start ecosystem.config.js
 
 echo "Deployment complete!"
