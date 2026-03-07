@@ -49,33 +49,15 @@ export default function DashboardPage() {
 
   if (authLoading || (!user && !authLoading)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="flex items-center justify-center py-32">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <h1 className="text-xl font-bold text-gray-900">Seniora</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">
-              {user?.name || user?.email}
-            </span>
-            <a
-              href="/api/auth/logout"
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Log out
-            </a>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        <div className="mb-8 flex items-center justify-between">
+    <>
+      <div className="mb-8 flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
             <p className="mt-1 text-sm text-gray-500">
@@ -153,7 +135,6 @@ export default function DashboardPage() {
             ))}
           </div>
         )}
-      </main>
-    </div>
+    </>
   );
 }
