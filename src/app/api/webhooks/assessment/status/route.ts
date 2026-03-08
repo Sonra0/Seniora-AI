@@ -23,28 +23,22 @@ export async function POST(req: NextRequest) {
         data: { status: updatedStatus },
       });
 
-      // Send Telegram notification
-      try {
-        const profile = await prisma.elderlyProfile.findUnique({
-          where: { id: session.elderlyProfileId },
-        });
-        if (profile) {
-          if (updatedStatus === "COMPLETED" && session.overallScore !== null) {
-            const severity = session.severity || "GREEN";
-            const summary = session.summary || "";
-            await sendTelegramNotification(
-              session.elderlyProfileId,
-              `${profile.name}'s assessment: score ${Math.round((session.overallScore ?? 0) * 100)}% (${severity}).\n${summary}`
-            );
-          } else if (updatedStatus === "FAILED") {
+      // Send Telegram notification only for failures
+      // (Detailed completion reports are sent from the summary generator in the next webhook)
+      if (updatedStatus === "FAILED") {
+        try {
+          const profile = await prisma.elderlyProfile.findUnique({
+            where: { id: session.elderlyProfileId },
+          });
+          if (profile) {
             await sendTelegramNotification(
               session.elderlyProfileId,
               `${profile.name}'s assessment call failed.`
             );
           }
+        } catch (err) {
+          console.error("Telegram notification error:", err);
         }
-      } catch (err) {
-        console.error("Telegram notification error:", err);
       }
     }
   }

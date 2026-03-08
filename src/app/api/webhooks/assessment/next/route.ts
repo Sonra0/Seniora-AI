@@ -7,6 +7,7 @@ import {
   analyzeVocalBiomarkers,
 } from "@/lib/gemini";
 import { textToSpeech } from "@/lib/elevenlabs";
+import { sendTelegramNotification } from "@/lib/telegram-api";
 import { writeFile, mkdir, access } from "fs/promises";
 import path from "path";
 
@@ -99,7 +100,9 @@ function processAnswerInBackground(
 function generateSummaryInBackground(
   sessionId: string,
   elderlyName: string,
-  language: string
+  language: string,
+  elderlyProfileId: string,
+  overallScore: number
 ) {
   (async () => {
     try {
@@ -150,14 +153,65 @@ function generateSummaryInBackground(
 
       const [report, vocalAnalysis] = await Promise.all([summaryPromise, vocalPromise]);
 
+      const severity = report.severity;
+
       await prisma.assessmentSession.update({
         where: { id: sessionId },
         data: {
           summary: report.summary,
-          severity: report.severity,
+          severity,
           ...(vocalAnalysis ? { vocalAnalysis: vocalAnalysis as object } : {}),
         },
       });
+
+      // Send detailed assessment report via Telegram
+      try {
+        const scorePct = Math.round(overallScore * 100);
+        const severityIcon = severity === "GREEN" ? "\u2705" : severity === "YELLOW" ? "\u26A0\uFE0F" : "\u274C";
+        const totalCorrect = allAnswers.filter((a: { result: string | null }) => a.result === "CORRECT").length;
+        const totalWrong = allAnswers.filter((a: { result: string | null }) => a.result === "WRONG").length;
+        const totalUnclear = allAnswers.filter((a: { result: string | null }) => a.result !== "CORRECT" && a.result !== "WRONG").length;
+
+        let msg = `${severityIcon} *${elderlyName}'s Assessment Report*\n`;
+        msg += `${todayStr}\n\n`;
+        msg += `*Score:* ${scorePct}% (${totalCorrect}/${allAnswers.length} correct)\n`;
+        msg += `*Status:* ${severity}\n\n`;
+
+        if (report.summary) {
+          msg += `*Summary:* ${report.summary}\n\n`;
+        }
+
+        // Question-by-question breakdown
+        msg += `*Questions:*\n`;
+        for (let i = 0; i < allAnswers.length; i++) {
+          const a = allAnswers[i];
+          const icon = a.result === "CORRECT" ? "\u2705" : a.result === "WRONG" ? "\u274C" : "\u2753";
+          msg += `${icon} ${a.questionText}\n`;
+          msg += `   Answer: ${a.elderAnswer || "No answer"}\n`;
+          if (a.result !== "CORRECT") {
+            msg += `   Correct: ${a.correctAnswer}\n`;
+          }
+        }
+
+        // Vocal analysis
+        if (vocalAnalysis) {
+          const va = vocalAnalysis as {
+            parkinsons: { currentProbability: number; futureRisk: number; details: string };
+            depression: { currentState: number; futurePropensity: number; details: string };
+            mood: { todayMood: string; wellnessScore: number; details: string };
+          };
+          msg += `\n*Vocal & Wellness Analysis:*\n`;
+          msg += `Mood: ${va.mood.todayMood} | Wellness: ${va.mood.wellnessScore}/100\n`;
+          msg += `${va.mood.details}\n\n`;
+          msg += `Parkinson's Risk: ${va.parkinsons.currentProbability}% (future: ${va.parkinsons.futureRisk}%)\n`;
+          msg += `Depression: ${va.depression.currentState}% (future: ${va.depression.futurePropensity}%)\n`;
+          msg += `\n_This analysis is for caregiver awareness only._`;
+        }
+
+        await sendTelegramNotification(elderlyProfileId, msg);
+      } catch (telegramErr) {
+        console.error("Telegram report notification failed:", telegramErr);
+      }
     } catch (err) {
       console.error("Background summary failed:", err);
     }
@@ -258,7 +312,7 @@ export async function POST(req: NextRequest) {
         },
       }).catch((err: unknown) => console.error("Session completion failed:", err));
 
-      generateSummaryInBackground(sessionId, profile.name, profile.language);
+      generateSummaryInBackground(sessionId, profile.name, profile.language, profile.id, score);
 
       // Generate TTS summary using same ElevenLabs voice
       const voiceId = profile.voiceId || undefined;
