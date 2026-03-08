@@ -294,7 +294,8 @@ async function processAssessments() {
     const existingSession = await prisma.assessmentSession.findFirst({
       where: { configId: config.id, date: todayStr },
     });
-    if (existingSession) continue;
+    // Skip if a session exists and isn't failed — allow retry for failed ones
+    if (existingSession && existingSession.status !== "FAILED") continue;
 
     const allQuestions = await prisma.assessmentQuestion.findMany({
       where: {
