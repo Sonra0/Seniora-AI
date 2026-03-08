@@ -4,6 +4,7 @@ import {
   evaluateAssessmentAnswer,
   generateAssessmentQuestionAudio,
   generateAssessmentSummary,
+  analyzeVocalBiomarkers,
 } from "@/lib/gemini";
 import { textToSpeech } from "@/lib/elevenlabs";
 import { writeFile, mkdir, access } from "fs/promises";
@@ -107,7 +108,9 @@ function generateSummaryInBackground(
         orderBy: { orderIndex: "asc" },
       });
       const todayStr = new Date().toLocaleDateString("en-CA");
-      const report = await generateAssessmentSummary({
+
+      // Generate text summary and vocal analysis in parallel
+      const summaryPromise = generateAssessmentSummary({
         elderlyName,
         date: todayStr,
         answers: allAnswers.map((a: { questionText: string; correctAnswer: string; elderAnswer: string | null; result: string | null }) => ({
@@ -118,9 +121,42 @@ function generateSummaryInBackground(
         })),
         language,
       });
+
+      // Fetch all recordings for vocal analysis
+      const vocalPromise = (async () => {
+        const authHeader = `Basic ${Buffer.from(
+          `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`
+        ).toString("base64")}`;
+
+        const audioBuffers: Buffer[] = [];
+        for (const a of allAnswers) {
+          const recUrl = (a as { recordingUrl: string | null }).recordingUrl;
+          if (!recUrl) continue;
+          try {
+            const res = await fetch(recUrl, {
+              headers: { Authorization: authHeader },
+              redirect: "follow",
+            });
+            if (res.ok) {
+              const buf = Buffer.from(await res.arrayBuffer());
+              if (buf.length > 0) audioBuffers.push(buf);
+            }
+          } catch { /* skip */ }
+        }
+
+        if (audioBuffers.length === 0) return null;
+        return analyzeVocalBiomarkers(audioBuffers, elderlyName);
+      })();
+
+      const [report, vocalAnalysis] = await Promise.all([summaryPromise, vocalPromise]);
+
       await prisma.assessmentSession.update({
         where: { id: sessionId },
-        data: { summary: report.summary, severity: report.severity },
+        data: {
+          summary: report.summary,
+          severity: report.severity,
+          ...(vocalAnalysis ? { vocalAnalysis: vocalAnalysis as object } : {}),
+        },
       });
     } catch (err) {
       console.error("Background summary failed:", err);

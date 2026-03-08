@@ -22,6 +22,12 @@ interface Answer {
   recordingUrl: string | null;
 }
 
+interface VocalAnalysis {
+  parkinsons: { currentProbability: number; futureRisk: number; details: string };
+  depression: { currentState: number; futurePropensity: number; details: string };
+  mood: { todayMood: string; wellnessScore: number; details: string };
+}
+
 interface Session {
   id: string;
   date: string;
@@ -29,6 +35,7 @@ interface Session {
   status: string;
   summary: string | null;
   severity: string | null;
+  vocalAnalysis: VocalAnalysis | null;
   answers: Answer[];
   createdAt: string;
 }
@@ -394,7 +401,120 @@ export default function AssessmentPage() {
                 ))}
               </div>
             </section>
-          ) : (
+          ) : null}
+
+          {/* Vocal Analysis Report */}
+          {latestSession?.vocalAnalysis && (
+            <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Vocal & Wellness Analysis</h2>
+
+              {/* Mood & Wellness - prominent card */}
+              <div className="rounded-lg bg-gradient-to-r from-indigo-50 to-purple-50 p-4 mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-xs font-medium text-indigo-600 uppercase tracking-wide">Today&apos;s Mood</p>
+                    <p className="text-xl font-bold text-gray-900">{latestSession.vocalAnalysis.mood.todayMood}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-medium text-indigo-600 uppercase tracking-wide">Wellness Score</p>
+                    <p className={`text-3xl font-bold ${
+                      latestSession.vocalAnalysis.mood.wellnessScore >= 70 ? "text-green-600" :
+                      latestSession.vocalAnalysis.mood.wellnessScore >= 40 ? "text-yellow-600" : "text-red-600"
+                    }`}>
+                      {latestSession.vocalAnalysis.mood.wellnessScore}<span className="text-sm text-gray-400">/100</span>
+                    </p>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600">{latestSession.vocalAnalysis.mood.details}</p>
+              </div>
+
+              {/* Risk Assessments Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Parkinson's */}
+                <div className="rounded-lg border border-gray-100 p-4">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Parkinson&apos;s Risk Assessment</h3>
+                  <div className="space-y-2">
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-gray-500">Current Probability</span>
+                        <span className="font-medium">{latestSession.vocalAnalysis.parkinsons.currentProbability}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${
+                            latestSession.vocalAnalysis.parkinsons.currentProbability <= 20 ? "bg-green-400" :
+                            latestSession.vocalAnalysis.parkinsons.currentProbability <= 50 ? "bg-yellow-400" : "bg-red-400"
+                          }`}
+                          style={{ width: `${latestSession.vocalAnalysis.parkinsons.currentProbability}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-gray-500">Future Risk</span>
+                        <span className="font-medium">{latestSession.vocalAnalysis.parkinsons.futureRisk}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${
+                            latestSession.vocalAnalysis.parkinsons.futureRisk <= 20 ? "bg-green-400" :
+                            latestSession.vocalAnalysis.parkinsons.futureRisk <= 50 ? "bg-yellow-400" : "bg-red-400"
+                          }`}
+                          style={{ width: `${latestSession.vocalAnalysis.parkinsons.futureRisk}%` }}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">{latestSession.vocalAnalysis.parkinsons.details}</p>
+                  </div>
+                </div>
+
+                {/* Depression */}
+                <div className="rounded-lg border border-gray-100 p-4">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Depression & Mental Health</h3>
+                  <div className="space-y-2">
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-gray-500">Current State</span>
+                        <span className="font-medium">{latestSession.vocalAnalysis.depression.currentState}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${
+                            latestSession.vocalAnalysis.depression.currentState <= 20 ? "bg-green-400" :
+                            latestSession.vocalAnalysis.depression.currentState <= 50 ? "bg-yellow-400" : "bg-red-400"
+                          }`}
+                          style={{ width: `${latestSession.vocalAnalysis.depression.currentState}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-gray-500">Future Propensity</span>
+                        <span className="font-medium">{latestSession.vocalAnalysis.depression.futurePropensity}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${
+                            latestSession.vocalAnalysis.depression.futurePropensity <= 20 ? "bg-green-400" :
+                            latestSession.vocalAnalysis.depression.futurePropensity <= 50 ? "bg-yellow-400" : "bg-red-400"
+                          }`}
+                          style={{ width: `${latestSession.vocalAnalysis.depression.futurePropensity}%` }}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">{latestSession.vocalAnalysis.depression.details}</p>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-400 mt-4 italic">
+                This analysis is for caregiver awareness only and does not constitute a clinical diagnosis.
+              </p>
+            </section>
+          )}
+
+          {/* No sessions fallback */}
+          {(!latestSession || (latestSession.status !== "COMPLETED" && !latestSession.vocalAnalysis)) && (
             <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
               <p className="text-sm text-gray-500 text-center py-4">
                 {sessions.length === 0

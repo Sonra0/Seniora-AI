@@ -186,6 +186,7 @@ model AssessmentSession {
   severity         AssessmentSeverity?
   twilioCallSid      String?
   emotionalResponse  String?
+  vocalAnalysis      Json?
   answers            AssessmentAnswer[]
   createdAt          DateTime           @default(now())
 }

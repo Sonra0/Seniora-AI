@@ -109,6 +109,67 @@ Keep it under 3 sentences. End with a goodbye.`;
   return result.response.text();
 }
 
+export interface VocalAnalysis {
+  parkinsons: {
+    currentProbability: number;
+    futureRisk: number;
+    details: string;
+  };
+  depression: {
+    currentState: number;
+    futurePropensity: number;
+    details: string;
+  };
+  mood: {
+    todayMood: string;
+    wellnessScore: number;
+    details: string;
+  };
+}
+
+export async function analyzeVocalBiomarkers(
+  audioBuffers: Buffer[],
+  elderlyName: string
+): Promise<VocalAnalysis> {
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+  const audioParts = audioBuffers.map((buf) => ({
+    inlineData: { mimeType: "audio/mpeg" as const, data: buf.toString("base64") },
+  }));
+
+  const prompt = `You are a clinical vocal biomarker analysis system. Analyze the provided audio recordings of an elderly person named ${elderlyName} during a cognitive assessment call. Perform a multi-dimensional vocal and psychological assessment.
+
+Analyze these specific criteria:
+
+1. **Parkinson's Disease Risk Assessment:**
+   - Analyze vocal tremors, speech fluidity, and micro-perturbations.
+   - Current Probability: The likelihood (0-100%) that Parkinsonian symptoms are currently present.
+   - Future Risk: The statistical probability (0-100%) of developing Parkinson's in the future based on current vocal biomarkers.
+   - Provide a brief clinical note.
+
+2. **Depression & Mental Health Analysis:**
+   - Analyze pitch variance, speech rate, and acoustic energy (prosody).
+   - Current State: The estimated percentage (0-100%) of clinical depression indicators present in the voice now.
+   - Future Propensity: The likelihood (0-100%) of developing depressive episodes in the future based on vocal patterns.
+   - Provide a brief clinical note.
+
+3. **Mood and Sentiment Analysis:**
+   - Analyze the overall tone, inflection, and emotional resonance of the speech.
+   - Identify the user's specific Mood for today (e.g., Calm, Energetic, Reflective, Anxious, Content, Tired).
+   - Assign a Wellness Score from 1 to 100. Use an optimistic bias — highlight positive nuances and avoid unnecessarily low ratings unless vocal distress is severe.
+   - Provide a brief note on observed emotional patterns.
+
+IMPORTANT: This is for caregiver awareness only, not clinical diagnosis. Be balanced and avoid alarming language.
+
+Respond in this exact JSON format only, no markdown:
+{"parkinsons":{"currentProbability":5,"futureRisk":8,"details":"..."},"depression":{"currentState":10,"futurePropensity":12,"details":"..."},"mood":{"todayMood":"Calm","wellnessScore":78,"details":"..."}}`;
+
+  const result = await model.generateContent([{ text: prompt }, ...audioParts]);
+  const text = result.response.text().trim();
+  const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  return JSON.parse(cleaned);
+}
+
 export async function generateAssessmentSummary(context: {
   elderlyName: string;
   date: string;
