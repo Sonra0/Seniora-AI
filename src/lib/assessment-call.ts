@@ -60,8 +60,8 @@ export async function executeAssessmentCall(sessionId: string) {
     // Pre-generate emotional question, "didn't hear" fallback, and "goodbye" audio in parallel with questions
     const isArabic = profile.language === "ar";
     const emotionalQText = isArabic
-      ? "شكراً على إجاباتك. الآن، كيف تشعر اليوم؟ هل هناك شيء يزعجك أو يقلقك؟"
-      : "Thanks for answering those questions. Now, how are you feeling today? Is there anything bothering you or on your mind?";
+      ? "أحسنت! الآن أخبرني، كيف حالك اليوم؟ كيف تشعر؟"
+      : "Great job with those! Now tell me, how are you doing today? How are you feeling?";
     const didntHearText = isArabic
       ? "لم أسمع شيئاً. دعنا ننتقل."
       : "I didn't hear anything. Let's move on.";
@@ -87,12 +87,22 @@ export async function executeAssessmentCall(sessionId: string) {
       await writeFile(path.join(audioDir, fileName), buf);
       return fileName;
     })();
+    const emergencyAskAudioPromise = (async () => {
+      const emergencyAskText = isArabic
+        ? "أنا آسف لسماع ذلك. هل تريد أن أتصل بشخص من عائلتك أو طبيبك الآن؟"
+        : "I'm sorry to hear that. Would you like me to call someone from your family or your doctor right now?";
+      const buf = await textToSpeech(emergencyAskText, voiceId);
+      const fileName = `assessment-emergency-ask-${sessionId}.mp3`;
+      await writeFile(path.join(audioDir, fileName), buf);
+      return fileName;
+    })();
 
-    const [questionUrls, emotionalFileName, didntHearFileName, didntHearShortFileName] = await Promise.all([
+    const [questionUrls, emotionalFileName, didntHearFileName, didntHearShortFileName, emergencyAskFileName] = await Promise.all([
       Promise.all(questionAudioPromises),
       emotionalAudioPromise,
       didntHearAudioPromise,
       didntHearShortAudioPromise,
+      emergencyAskAudioPromise,
     ]);
     const q1Url = questionUrls[0];
 
