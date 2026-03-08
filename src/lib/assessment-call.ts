@@ -88,13 +88,18 @@ export async function executeAssessmentCall(sessionId: string) {
       return fileName;
     })();
     const emergencyAskAudioPromise = (async () => {
-      const emergencyAskText = isArabic
-        ? "أنا آسف لسماع ذلك. هل تريد أن أتصل بشخص من عائلتك أو طبيبك الآن؟"
-        : "I'm sorry to hear that. Would you like me to call someone from your family or your doctor right now?";
-      const buf = await textToSpeech(emergencyAskText, voiceId);
-      const fileName = `assessment-emergency-ask-${sessionId}.mp3`;
-      await writeFile(path.join(audioDir, fileName), buf);
-      return fileName;
+      try {
+        const emergencyAskText = isArabic
+          ? "أنا آسف لسماع ذلك. هل تريد أن أتصل بشخص من عائلتك أو طبيبك الآن؟"
+          : "I'm sorry to hear that. Would you like me to call someone from your family or your doctor right now?";
+        const buf = await textToSpeech(emergencyAskText, voiceId);
+        const fileName = `assessment-emergency-ask-${sessionId}.mp3`;
+        await writeFile(path.join(audioDir, fileName), buf);
+        return fileName;
+      } catch (err) {
+        console.warn("Emergency-ask audio pre-generation failed (will use fallback):", err);
+        return null;
+      }
     })();
 
     const [questionUrls, emotionalFileName, didntHearFileName, didntHearShortFileName, emergencyAskFileName] = await Promise.all([
