@@ -297,7 +297,10 @@ async function processAssessments() {
     if (existingSession) continue;
 
     const allQuestions = await prisma.assessmentQuestion.findMany({
-      where: { elderlyProfileId: config.elderlyProfileId },
+      where: {
+        elderlyProfileId: config.elderlyProfileId,
+        correctAnswer: { not: "" },
+      },
     });
 
     if (allQuestions.length < 10) continue;
