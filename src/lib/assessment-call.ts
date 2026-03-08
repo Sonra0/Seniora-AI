@@ -57,17 +57,54 @@ export async function executeAssessmentCall(sessionId: string) {
       return `${process.env.NEXT_PUBLIC_APP_URL}/api/audio/${qFileName}`;
     });
 
-    const questionUrls = await Promise.all(questionAudioPromises);
+    // Pre-generate emotional question, "didn't hear" fallback, and "goodbye" audio in parallel with questions
+    const isArabic = profile.language === "ar";
+    const emotionalQText = isArabic
+      ? "شكراً على إجاباتك. الآن، كيف تشعر اليوم؟ هل هناك شيء يزعجك أو يقلقك؟"
+      : "Thanks for answering those questions. Now, how are you feeling today? Is there anything bothering you or on your mind?";
+    const didntHearText = isArabic
+      ? "لم أسمع شيئاً. دعنا ننتقل."
+      : "I didn't hear anything. Let's move on.";
+    const didntHearShortText = isArabic
+      ? "لم أسمع شيئاً."
+      : "I didn't hear anything.";
+
+    const emotionalAudioPromise = (async () => {
+      const buf = await textToSpeech(emotionalQText, voiceId);
+      const fileName = `assessment-emotional-${sessionId}.mp3`;
+      await writeFile(path.join(audioDir, fileName), buf);
+      return fileName;
+    })();
+    const didntHearAudioPromise = (async () => {
+      const buf = await textToSpeech(didntHearText, voiceId);
+      const fileName = `assessment-noanswer-${sessionId}.mp3`;
+      await writeFile(path.join(audioDir, fileName), buf);
+      return fileName;
+    })();
+    const didntHearShortAudioPromise = (async () => {
+      const buf = await textToSpeech(didntHearShortText, voiceId);
+      const fileName = `assessment-noanswer-short-${sessionId}.mp3`;
+      await writeFile(path.join(audioDir, fileName), buf);
+      return fileName;
+    })();
+
+    const [questionUrls, emotionalFileName, didntHearFileName, didntHearShortFileName] = await Promise.all([
+      Promise.all(questionAudioPromises),
+      emotionalAudioPromise,
+      didntHearAudioPromise,
+      didntHearShortAudioPromise,
+    ]);
     const q1Url = questionUrls[0];
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+    const didntHearUrl = `${baseUrl}/api/audio/${didntHearFileName}`;
 
     const twiml = `<Response>
       <Play>${greetingUrl}</Play>
       <Pause length="1"/>
       <Play>${q1Url}</Play>
       <Record maxLength="15" playBeep="false" timeout="3" action="${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=0" method="POST"/>
-      <Say>I didn't hear anything. Let's move on.</Say>
+      <Play>${didntHearUrl}</Play>
       <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=0</Redirect>
     </Response>`;
 

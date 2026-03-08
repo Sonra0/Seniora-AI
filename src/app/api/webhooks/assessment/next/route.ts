@@ -320,19 +320,37 @@ export async function POST(req: NextRequest) {
     const isLastCognitive = nextIndex >= totalQuestions;
 
     if (isLastCognitive) {
-      // All cognitive questions done — ask emotional question
+      // All cognitive questions done — ask emotional question (pre-generated audio)
       const isArabic = profile.language === "ar";
       const lang = isArabic ? "ar-SA" : "en-US";
-      const emotionalQ = isArabic
-        ? "شكراً على إجاباتك. الآن، كيف تشعر اليوم؟ هل هناك شيء يزعجك أو يقلقك؟"
-        : "Thanks for answering those questions. Now, how are you feeling today? Is there anything bothering you or on your mind?";
+      const emotionalAudioFile = `assessment-emotional-${sessionId}.mp3`;
+      const didntHearShortFile = `assessment-noanswer-short-${sessionId}.mp3`;
+
+      // Use pre-generated audio, fall back to <Say> if missing
+      let emotionalAudioTag: string;
+      let didntHearShortTag: string;
+      try {
+        await access(path.join(audioDir, emotionalAudioFile));
+        emotionalAudioTag = `<Play>${baseUrl}/api/audio/${emotionalAudioFile}</Play>`;
+      } catch {
+        const emotionalQ = isArabic
+          ? "شكراً على إجاباتك. الآن، كيف تشعر اليوم؟ هل هناك شيء يزعجك أو يقلقك؟"
+          : "Thanks for answering those questions. Now, how are you feeling today? Is there anything bothering you or on your mind?";
+        emotionalAudioTag = `<Say>${emotionalQ}</Say>`;
+      }
+      try {
+        await access(path.join(audioDir, didntHearShortFile));
+        didntHearShortTag = `<Play>${baseUrl}/api/audio/${didntHearShortFile}</Play>`;
+      } catch {
+        didntHearShortTag = `<Say>I didn't hear anything.</Say>`;
+      }
 
       const twiml = `<Response>
         <Pause length="1"/>
-        <Say>${emotionalQ}</Say>
+        ${emotionalAudioTag}
         <Gather input="speech" speechTimeout="3" language="${lang}" action="${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}&amp;phase=emotional" method="POST">
         </Gather>
-        <Say>I didn't hear anything.</Say>
+        ${didntHearShortTag}
         <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}&amp;phase=emotional</Redirect>
       </Response>`;
 
@@ -374,10 +392,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Use pre-generated "didn't hear" audio
+    const didntHearFile = `assessment-noanswer-${sessionId}.mp3`;
+    let didntHearTag: string;
+    try {
+      await access(path.join(audioDir, didntHearFile));
+      didntHearTag = `<Play>${baseUrl}/api/audio/${didntHearFile}</Play>`;
+    } catch {
+      didntHearTag = `<Say>I didn't hear anything. Let's move on.</Say>`;
+    }
+
     const twiml = `<Response>
       ${nextQAudioTag}
       <Record maxLength="15" playBeep="false" timeout="3" action="${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${nextIndex}" method="POST"/>
-      <Say>I didn't hear anything. Let's move on.</Say>
+      ${didntHearTag}
       <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${nextIndex}</Redirect>
     </Response>`;
 
