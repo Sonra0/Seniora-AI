@@ -7,8 +7,8 @@ import { executeAssessmentCall } from "../lib/assessment-call";
 const MAX_ATTEMPTS = 3;
 const RETRY_INTERVAL_MINUTES = 5;
 
-function getTimeInTimezone(timezone: string) {
-  const now = new Date();
+function getTimeInTimezone(timezone: string, referenceTime?: Date) {
+  const now = referenceTime || new Date();
   const formatted = now.toLocaleString("en-US", {
     timeZone: timezone,
     hour: "2-digit",
@@ -20,26 +20,26 @@ function getTimeInTimezone(timezone: string) {
   return `${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
 }
 
-function getDayOfWeekInTimezone(timezone: string) {
-  const now = new Date();
+function getDayOfWeekInTimezone(timezone: string, referenceTime?: Date) {
+  const now = referenceTime || new Date();
   const dayStr = now.toLocaleString("en-US", { timeZone: timezone, weekday: "short" });
   const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   return dayMap[dayStr] ?? now.getDay();
 }
 
-function getTodayDateStringInTimezone(timezone: string) {
-  const now = new Date();
+function getTodayDateStringInTimezone(timezone: string, referenceTime?: Date) {
+  const now = referenceTime || new Date();
   const parts = now.toLocaleDateString("en-CA", { timeZone: timezone }).split("-");
   return parts.join("-");
 }
 
-function getNowMinutesInTimezone(timezone: string) {
-  const timeStr = getTimeInTimezone(timezone);
+function getNowMinutesInTimezone(timezone: string, referenceTime?: Date) {
+  const timeStr = getTimeInTimezone(timezone, referenceTime);
   const [h, m] = timeStr.split(":").map(Number);
   return h * 60 + m;
 }
 
-async function deactivatePastReminders() {
+async function deactivatePastReminders(tickTime: Date) {
   // Find all active reminders with a scheduledDate
   const reminders = await prisma.reminder.findMany({
     where: { active: true, scheduledDate: { not: null } },
@@ -48,7 +48,7 @@ async function deactivatePastReminders() {
 
   for (const reminder of reminders) {
     const tz = reminder.elderlyProfile.timezone || "UTC";
-    const todayStr = getTodayDateStringInTimezone(tz);
+    const todayStr = getTodayDateStringInTimezone(tz, tickTime);
     if (reminder.scheduledDate! < todayStr) {
       await prisma.reminder.update({
         where: { id: reminder.id },
@@ -59,7 +59,7 @@ async function deactivatePastReminders() {
   }
 }
 
-async function processReminders() {
+async function processReminders(tickTime: Date) {
   const reminders = await prisma.reminder.findMany({
     where: {
       active: true,
@@ -78,9 +78,9 @@ async function processReminders() {
 
   for (const reminder of reminders) {
     const tz = reminder.elderlyProfile.timezone || "UTC";
-    const currentTime = getTimeInTimezone(tz);
-    const currentDay = getDayOfWeekInTimezone(tz);
-    const todayStr = getTodayDateStringInTimezone(tz);
+    const currentTime = getTimeInTimezone(tz, tickTime);
+    const currentDay = getDayOfWeekInTimezone(tz, tickTime);
+    const todayStr = getTodayDateStringInTimezone(tz, tickTime);
 
     // If reminder has a specific date, only fire on that date
     if (reminder.scheduledDate && reminder.scheduledDate !== todayStr) continue;
@@ -109,7 +109,7 @@ async function processReminders() {
       if (existingLog) continue;
     } else if (intervalHours) {
       // Hour-based intervals: first call at scheduledTime, then repeat every N hours
-      const nowMinutes = getNowMinutesInTimezone(tz);
+      const nowMinutes = getNowMinutesInTimezone(tz, tickTime);
       const startMinutes = h * 60 + m;
 
       // Only fire at or after the scheduled start time
@@ -274,7 +274,7 @@ async function processEmergencyCalls() {
   }
 }
 
-async function processAssessments() {
+async function processAssessments(tickTime: Date) {
   const configs = await prisma.assessmentConfig.findMany({
     where: {
       active: true,
@@ -287,13 +287,13 @@ async function processAssessments() {
 
   for (const config of configs) {
     const tz = config.elderlyProfile.timezone || "UTC";
-    const currentTime = getTimeInTimezone(tz);
+    const currentTime = getTimeInTimezone(tz, tickTime);
 
     console.log(`[Assessments] ${config.elderlyProfile.name}: scheduled=${config.scheduledTime}, current=${currentTime} (tz=${tz})`);
 
     if (config.scheduledTime !== currentTime) continue;
 
-    const todayStr = getTodayDateStringInTimezone(tz);
+    const todayStr = getTodayDateStringInTimezone(tz, tickTime);
 
     const existingSession = await prisma.assessmentSession.findFirst({
       where: { configId: config.id, date: todayStr },
@@ -348,12 +348,15 @@ async function processAssessments() {
 }
 
 cron.schedule("* * * * *", async () => {
-  console.log(`[${new Date().toISOString()}] Checking reminders...`);
+  // Snapshot the time at tick start so all functions use the same minute
+  // even if earlier functions (e.g. making Twilio calls) take a while
+  const tickTime = new Date();
+  console.log(`[${tickTime.toISOString()}] Checking reminders...`);
 
-  try { await deactivatePastReminders(); } catch (error) {
+  try { await deactivatePastReminders(tickTime); } catch (error) {
     console.error("Error in deactivatePastReminders:", error);
   }
-  try { await processReminders(); } catch (error) {
+  try { await processReminders(tickTime); } catch (error) {
     console.error("Error in processReminders:", error);
   }
   try { await processRetries(); } catch (error) {
@@ -362,7 +365,7 @@ cron.schedule("* * * * *", async () => {
   try { await processEmergencyCalls(); } catch (error) {
     console.error("Error in processEmergencyCalls:", error);
   }
-  try { await processAssessments(); } catch (error) {
+  try { await processAssessments(tickTime); } catch (error) {
     console.error("Error in processAssessments:", error);
   }
 });
