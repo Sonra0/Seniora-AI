@@ -2,39 +2,8 @@ import { prisma } from "./prisma";
 import { twilioClient } from "./twilio";
 import { textToSpeech } from "./elevenlabs";
 import { generateAssessmentGreeting, generateAssessmentQuestionAudio } from "./gemini";
-import { writeFile, mkdir, access } from "fs/promises";
+import { writeFile, mkdir } from "fs/promises";
 import path from "path";
-
-const FILLER_PHRASES = [
-  "Hmm, let me think...",
-  "Okay...",
-  "Alright...",
-  "I see...",
-  "Mm-hmm...",
-];
-
-async function ensureFillerAudio(voiceId: string): Promise<string[]> {
-  const fillerDir = path.join(process.cwd(), "public", "audio", "fillers");
-  await mkdir(fillerDir, { recursive: true });
-
-  const urls: string[] = [];
-
-  for (let i = 0; i < FILLER_PHRASES.length; i++) {
-    const fileName = `filler-${voiceId.slice(0, 8)}-${i}.mp3`;
-    const filePath = path.join(fillerDir, fileName);
-
-    try {
-      await access(filePath);
-    } catch {
-      const buffer = await textToSpeech(FILLER_PHRASES[i], voiceId);
-      await writeFile(filePath, buffer);
-    }
-
-    urls.push(`${process.env.NEXT_PUBLIC_APP_URL}/api/audio/fillers/${fileName}`);
-  }
-
-  return urls;
-}
 
 export async function executeAssessmentCall(sessionId: string) {
   const session = await prisma.assessmentSession.findUnique({
@@ -56,8 +25,6 @@ export async function executeAssessmentCall(sessionId: string) {
   try {
     const profile = session.elderlyProfile;
     const voiceId = profile.voiceId || undefined;
-
-    const fillerUrls = await ensureFillerAudio(voiceId || "21m00Tcm4TlvDq8ikWAM");
 
     const hour = new Date().getHours();
     const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
@@ -94,15 +61,16 @@ export async function executeAssessmentCall(sessionId: string) {
     const q1Url = questionUrls[0];
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
-    const randomFiller = fillerUrls[Math.floor(Math.random() * fillerUrls.length)];
+    const lang = profile.language === "ar" ? "ar-SA" : "en-US";
 
     const twiml = `<Response>
       <Play>${greetingUrl}</Play>
       <Pause length="1"/>
       <Play>${q1Url}</Play>
-      <Record maxLength="15" playBeep="false" timeout="5" action="${baseUrl}/api/webhooks/assessment?sessionId=${sessionId}&amp;answerIndex=0&amp;fillerUrl=${encodeURIComponent(randomFiller)}" method="POST"/>
+      <Gather input="speech" speechTimeout="3" language="${lang}" action="${baseUrl}/api/webhooks/assessment?sessionId=${sessionId}&amp;answerIndex=0" method="POST">
+      </Gather>
       <Say>I didn't hear anything. Let's move on.</Say>
-      <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=0</Redirect>
+      <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=0&amp;speechResult=</Redirect>
     </Response>`;
 
     const call = await twilioClient.calls.create({
