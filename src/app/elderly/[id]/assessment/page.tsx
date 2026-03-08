@@ -607,7 +607,7 @@ export default function AssessmentPage() {
                             {a.recordingUrl && (
                               <div className="ml-5 mt-1">
                                 <audio controls preload="none" className="h-7 w-full max-w-xs">
-                                  <source src={a.recordingUrl} type="audio/mpeg" />
+                                  <source src={`/api/recording?url=${encodeURIComponent(a.recordingUrl)}`} type="audio/mpeg" />
                                 </audio>
                               </div>
                             )}

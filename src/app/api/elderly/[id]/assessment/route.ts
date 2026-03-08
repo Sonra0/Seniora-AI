@@ -25,7 +25,7 @@ export async function GET(
 
   const sessions = await prisma.assessmentSession.findMany({
     where: { elderlyProfileId: id },
-    include: { answers: true },
+    include: { answers: { orderBy: { orderIndex: "asc" } } },
     orderBy: { createdAt: "desc" },
     take: 30,
   });

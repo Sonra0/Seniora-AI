@@ -61,7 +61,6 @@ export async function executeAssessmentCall(sessionId: string) {
     const q1Url = questionUrls[0];
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
-    const lang = profile.language === "ar" ? "ar-SA" : "en-US";
 
     const twiml = `<Response>
       <Play>${greetingUrl}</Play>
