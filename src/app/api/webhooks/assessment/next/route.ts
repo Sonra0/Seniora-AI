@@ -7,7 +7,7 @@ import {
   generateAssessmentClosing,
   generateAssessmentSummary,
 } from "@/lib/gemini";
-import { writeFile, mkdir } from "fs/promises";
+import { writeFile, mkdir, access } from "fs/promises";
 import path from "path";
 
 function sleep(ms: number) {
@@ -20,7 +20,7 @@ async function fetchRecordingWithRetry(recordingUrl: string, maxRetries = 3): Pr
   ).toString("base64")}`;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    if (attempt > 0) await sleep(2000);
+    if (attempt > 0) await sleep(1000);
 
     // Try .mp3 format first, then raw URL
     for (const url of [`${recordingUrl}.mp3`, recordingUrl]) {
@@ -107,6 +107,24 @@ export async function POST(req: NextRequest) {
     const audioDir = path.join(process.cwd(), "public", "audio");
     await mkdir(audioDir, { recursive: true });
 
+    const nextIndex = answerIndex + 1;
+    const isLastQuestion = nextIndex >= session.answers.length;
+
+    // Check if next question audio is already pre-generated
+    const nextAnswer = !isLastQuestion ? session.answers[nextIndex] : null;
+    const pregenFileName = nextAnswer ? `assessment-q-${nextAnswer.id}.mp3` : null;
+    const pregenPath = pregenFileName ? path.join(audioDir, pregenFileName) : null;
+    let nextQPregenerated = false;
+    if (pregenPath) {
+      try {
+        await access(pregenPath);
+        nextQPregenerated = true;
+      } catch {
+        nextQPregenerated = false;
+      }
+    }
+
+    // Transcribe recording
     let elderAnswer = "";
     if (recordingUrl) {
       try {
@@ -118,6 +136,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Evaluate answer + generate response TTS in parallel where possible
     let result: "CORRECT" | "WRONG" | "UNCLEAR" = "UNCLEAR";
     let responseText = "I didn't quite catch that, but that's okay. Let's continue.";
 
@@ -136,18 +155,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    await prisma.assessmentAnswer.update({
-      where: { id: currentAnswer.id },
-      data: { elderAnswer: elderAnswer || null, result },
-    });
-
-    const responseAudio = await generateAudioOrFallback(
-      responseText, voiceId,
-      `assessment-resp-${currentAnswer.id}.mp3`, audioDir, baseUrl!
-    );
-
-    const nextIndex = answerIndex + 1;
-    const isLastQuestion = nextIndex >= session.answers.length;
+    // Run DB update and response TTS in parallel
+    const [, responseAudio] = await Promise.all([
+      prisma.assessmentAnswer.update({
+        where: { id: currentAnswer.id },
+        data: { elderAnswer: elderAnswer || null, result },
+      }),
+      generateAudioOrFallback(
+        responseText, voiceId,
+        `assessment-resp-${currentAnswer.id}.mp3`, audioDir, baseUrl!
+      ),
+    ]);
 
     if (isLastQuestion) {
       const allAnswers = await prisma.assessmentAnswer.findMany({
@@ -221,24 +239,29 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const nextAnswer = session.answers[nextIndex];
-    let nextQText = `Question ${nextIndex + 1}: ${nextAnswer.questionText}`;
-    try {
-      nextQText = await generateAssessmentQuestionAudio({
-        elderlyName: profile.name,
-        questionText: nextAnswer.questionText,
-        questionNumber: nextIndex + 1,
-        totalQuestions: session.answers.length,
-        language: profile.language,
-      });
-    } catch (err) {
-      console.error("Question audio generation failed:", err);
-    }
+    // Use pre-generated question audio if available, otherwise generate on-the-fly
+    let nextQAudio: { url: string; usedTts: boolean };
+    let nextQText = `Question ${nextIndex + 1}: ${nextAnswer!.questionText}`;
 
-    const nextQAudio = await generateAudioOrFallback(
-      nextQText, voiceId,
-      `assessment-q-${nextAnswer.id}.mp3`, audioDir, baseUrl!
-    );
+    if (nextQPregenerated) {
+      nextQAudio = { url: `${baseUrl}/api/audio/${pregenFileName}`, usedTts: true };
+    } else {
+      try {
+        nextQText = await generateAssessmentQuestionAudio({
+          elderlyName: profile.name,
+          questionText: nextAnswer!.questionText,
+          questionNumber: nextIndex + 1,
+          totalQuestions: session.answers.length,
+          language: profile.language,
+        });
+      } catch (err) {
+        console.error("Question audio generation failed:", err);
+      }
+      nextQAudio = await generateAudioOrFallback(
+        nextQText, voiceId,
+        `assessment-q-${nextAnswer!.id}.mp3`, audioDir, baseUrl!
+      );
+    }
 
     const fillerIndex = Math.floor(Math.random() * 5);
     const fillerVoice = (voiceId || "21m00Tcm4TlvDq8ikWAM").slice(0, 8);

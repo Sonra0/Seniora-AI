@@ -75,19 +75,23 @@ export async function executeAssessmentCall(sessionId: string) {
     await writeFile(path.join(audioDir, greetingFileName), greetingBuffer);
     const greetingUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/audio/${greetingFileName}`;
 
-    const firstAnswer = session.answers[0];
-    const q1Script = await generateAssessmentQuestionAudio({
-      elderlyName: profile.name,
-      questionText: firstAnswer.questionText,
-      questionNumber: 1,
-      totalQuestions: session.answers.length,
-      language: profile.language,
+    // Pre-generate ALL question audio in parallel (eliminates per-question latency during call)
+    const questionAudioPromises = session.answers.map(async (answer, idx) => {
+      const qScript = await generateAssessmentQuestionAudio({
+        elderlyName: profile.name,
+        questionText: answer.questionText,
+        questionNumber: idx + 1,
+        totalQuestions: session.answers.length,
+        language: profile.language,
+      });
+      const qBuffer = await textToSpeech(qScript, voiceId);
+      const qFileName = `assessment-q-${answer.id}.mp3`;
+      await writeFile(path.join(audioDir, qFileName), qBuffer);
+      return `${process.env.NEXT_PUBLIC_APP_URL}/api/audio/${qFileName}`;
     });
 
-    const q1Buffer = await textToSpeech(q1Script, voiceId);
-    const q1FileName = `assessment-q-${firstAnswer.id}.mp3`;
-    await writeFile(path.join(audioDir, q1FileName), q1Buffer);
-    const q1Url = `${process.env.NEXT_PUBLIC_APP_URL}/api/audio/${q1FileName}`;
+    const questionUrls = await Promise.all(questionAudioPromises);
+    const q1Url = questionUrls[0];
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
     const randomFiller = fillerUrls[Math.floor(Math.random() * fillerUrls.length)];
