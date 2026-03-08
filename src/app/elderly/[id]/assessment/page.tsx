@@ -146,6 +146,25 @@ export default function AssessmentPage() {
     }
   }
 
+  const [triggering, setTriggering] = useState(false);
+
+  async function triggerTestCall() {
+    setTriggering(true);
+    setError("");
+    setSuccess("");
+    try {
+      const res = await apiFetch(`/api/elderly/${id}/assessment/trigger`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to trigger");
+      setSuccess("Assessment call triggered! You should receive a call shortly.");
+      fetchData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to trigger call");
+    } finally {
+      setTriggering(false);
+    }
+  }
+
   const filledCount = questions.filter((q) => q.correctAnswer.trim()).length;
   const latestSession = sessions[0];
 
@@ -233,6 +252,13 @@ export default function AssessmentPage() {
                 }`}
               >
                 {config?.active ? "Deactivate" : "Activate"}
+              </button>
+              <button
+                onClick={triggerTestCall}
+                disabled={triggering || filledCount < 10}
+                className="rounded-lg bg-indigo-100 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {triggering ? "Calling..." : "Test Call Now"}
               </button>
             </div>
             {!config?.active && filledCount < 10 && (
