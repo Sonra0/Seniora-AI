@@ -67,10 +67,9 @@ export async function executeAssessmentCall(sessionId: string) {
       <Play>${greetingUrl}</Play>
       <Pause length="1"/>
       <Play>${q1Url}</Play>
-      <Gather input="speech" speechTimeout="3" language="${lang}" action="${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=0" method="POST">
-      </Gather>
+      <Record maxLength="15" playBeep="false" timeout="3" action="${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=0" method="POST"/>
       <Say>I didn't hear anything. Let's move on.</Say>
-      <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=0&amp;speechResult=</Redirect>
+      <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=0</Redirect>
     </Response>`;
 
     const call = await twilioClient.calls.create({

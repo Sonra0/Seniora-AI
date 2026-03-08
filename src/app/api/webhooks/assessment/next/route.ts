@@ -9,40 +9,92 @@ import { textToSpeech } from "@/lib/elevenlabs";
 import { writeFile, mkdir, access } from "fs/promises";
 import path from "path";
 
-function buildGatherTwiml(
-  baseUrl: string,
-  sessionId: string,
-  answerIndex: number,
-  language: string,
-  phase?: string
-): string {
-  const lang = language === "ar" ? "ar-SA" : "en-US";
-  const phaseParam = phase ? `&amp;phase=${phase}` : "";
-  return `<Gather input="speech" speechTimeout="3" language="${lang}" action="${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}${phaseParam}" method="POST">
-      </Gather>
-      <Say>I didn't hear anything. Let's move on.</Say>
-      <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}${phaseParam}&amp;speechResult=</Redirect>`;
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Fire-and-forget: evaluate a single answer via Gemini and save to DB
-function evaluateInBackground(
+// Fetch recording from Twilio, transcribe with Gemini, evaluate, save to DB
+function processAnswerInBackground(
   answerId: string,
+  recordingUrl: string,
   questionText: string,
   correctAnswer: string,
-  elderAnswer: string,
   language: string
 ) {
-  evaluateAssessmentAnswer({ questionText, correctAnswer, elderAnswer, language })
-    .then(async (evaluation) => {
+  (async () => {
+    try {
+      const authHeader = `Basic ${Buffer.from(
+        `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`
+      ).toString("base64")}`;
+
+      // Wait a moment for Twilio to process the recording
+      await sleep(1500);
+
+      let audioBuffer: Buffer | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) await sleep(1000);
+        for (const url of [`${recordingUrl}.mp3`, recordingUrl]) {
+          try {
+            const response = await fetch(url, {
+              headers: { Authorization: authHeader },
+              redirect: "follow",
+            });
+            if (response.ok) {
+              const buf = Buffer.from(await response.arrayBuffer());
+              if (buf.length > 0) { audioBuffer = buf; break; }
+            }
+          } catch { /* retry */ }
+        }
+        if (audioBuffer) break;
+      }
+
+      if (!audioBuffer) {
+        await prisma.assessmentAnswer.update({
+          where: { id: answerId },
+          data: { result: "UNCLEAR" },
+        });
+        return;
+      }
+
+      // Transcribe
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+      const base64Audio = audioBuffer.toString("base64");
+      const transcription = await model.generateContent([
+        { text: "Transcribe the following audio recording. Return ONLY the transcription text, nothing else. If you cannot understand the audio, return 'UNCLEAR'." },
+        { inlineData: { mimeType: "audio/mpeg", data: base64Audio } },
+      ]);
+      const elderAnswer = transcription.response.text().trim();
+
+      if (!elderAnswer || elderAnswer === "UNCLEAR") {
+        await prisma.assessmentAnswer.update({
+          where: { id: answerId },
+          data: { elderAnswer: elderAnswer || null, result: "UNCLEAR" },
+        });
+        return;
+      }
+
+      // Evaluate
+      const evaluation = await evaluateAssessmentAnswer({
+        questionText, correctAnswer, elderAnswer, language,
+      });
+
       await prisma.assessmentAnswer.update({
         where: { id: answerId },
-        data: { result: evaluation.result },
+        data: { elderAnswer, result: evaluation.result },
       });
-    })
-    .catch((err: unknown) => console.error("Background evaluation failed:", err));
+    } catch (err) {
+      console.error("Background answer processing failed:", err);
+      await prisma.assessmentAnswer.update({
+        where: { id: answerId },
+        data: { result: "UNCLEAR" },
+      }).catch(() => {});
+    }
+  })();
 }
 
-// Fire-and-forget: generate summary
 function generateSummaryInBackground(
   sessionId: string,
   elderlyName: string,
@@ -76,14 +128,6 @@ function generateSummaryInBackground(
   })();
 }
 
-function getSpeechResult(req: NextRequest, formData: FormData | null): string {
-  if (formData) {
-    const speech = formData.get("SpeechResult") as string;
-    if (speech) return speech;
-  }
-  return decodeURIComponent(req.nextUrl.searchParams.get("speechResult") || "");
-}
-
 export async function POST(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get("sessionId") || "";
   const answerIndex = parseInt(req.nextUrl.searchParams.get("answerIndex") || "0");
@@ -93,10 +137,7 @@ export async function POST(req: NextRequest) {
   let formData: FormData | null = null;
   try {
     formData = await req.formData();
-  } catch {
-    // No form data (redirect fallback)
-  }
-  const elderAnswer = getSpeechResult(req, formData);
+  } catch { /* no form data */ }
 
   try {
     const session = await prisma.assessmentSession.findUnique({
@@ -118,16 +159,21 @@ export async function POST(req: NextRequest) {
     const totalQuestions = session.answers.length;
 
     // ============================================================
-    // PHASE: EMOTIONAL — user just answered the emotional question
+    // PHASE: EMOTIONAL — user answered the emotional question
     // ============================================================
     if (phase === "emotional") {
+      const emotionalAnswer = (formData?.get("SpeechResult") as string) || "";
+
       // Save emotional response
       prisma.assessmentSession.update({
         where: { id: sessionId },
-        data: { emotionalResponse: elderAnswer || null },
+        data: { emotionalResponse: emotionalAnswer || null },
       }).catch((err: unknown) => console.error("Emotional save failed:", err));
 
-      // Read evaluation results from DB (should be done by now)
+      // Wait a moment for background evaluations to finish
+      await sleep(2000);
+
+      // Read evaluation results from DB
       const answers = await prisma.assessmentAnswer.findMany({
         where: { sessionId },
         orderBy: { orderIndex: "asc" },
@@ -138,7 +184,7 @@ export async function POST(req: NextRequest) {
 
       // Build spoken summary
       const isArabic = profile.language === "ar";
-      let summaryParts: string[] = [];
+      const summaryParts: string[] = [];
 
       if (isArabic) {
         summaryParts.push(`حصلت على ${totalCorrect} من ${answers.length} إجابات صحيحة.`);
@@ -148,30 +194,23 @@ export async function POST(req: NextRequest) {
 
       for (const a of answers) {
         if (a.result === "CORRECT") {
-          if (isArabic) {
-            summaryParts.push(`سؤال: ${a.questionText}. إجابتك صحيحة!`);
-          } else {
-            summaryParts.push(`For the question: ${a.questionText}. You answered correctly!`);
-          }
+          summaryParts.push(isArabic
+            ? `سؤال: ${a.questionText}. إجابتك صحيحة!`
+            : `For the question: ${a.questionText}. You answered correctly!`);
         } else if (a.result === "WRONG") {
-          if (isArabic) {
-            summaryParts.push(`سؤال: ${a.questionText}. الإجابة الصحيحة هي ${a.correctAnswer}.`);
-          } else {
-            summaryParts.push(`For the question: ${a.questionText}. The correct answer is ${a.correctAnswer}.`);
-          }
+          summaryParts.push(isArabic
+            ? `سؤال: ${a.questionText}. الإجابة الصحيحة هي ${a.correctAnswer}.`
+            : `For the question: ${a.questionText}. The correct answer is ${a.correctAnswer}.`);
         } else {
-          if (isArabic) {
-            summaryParts.push(`سؤال: ${a.questionText}. لم أتمكن من سماع إجابتك. الإجابة هي ${a.correctAnswer}.`);
-          } else {
-            summaryParts.push(`For the question: ${a.questionText}. I couldn't catch your answer. The answer is ${a.correctAnswer}.`);
-          }
+          summaryParts.push(isArabic
+            ? `سؤال: ${a.questionText}. لم أتمكن من سماع إجابتك. الإجابة هي ${a.correctAnswer}.`
+            : `For the question: ${a.questionText}. I couldn't catch your answer. The answer is ${a.correctAnswer}.`);
         }
       }
 
-      const closingText = isArabic
+      summaryParts.push(isArabic
         ? "شكراً لوقتك اليوم. اعتني بنفسك!"
-        : "Thank you for your time today. Take care!";
-      summaryParts.push(closingText);
+        : "Thank you for your time today. Take care!");
 
       // Complete session
       prisma.assessmentSession.update({
@@ -183,10 +222,9 @@ export async function POST(req: NextRequest) {
         },
       }).catch((err: unknown) => console.error("Session completion failed:", err));
 
-      // Generate detailed summary in background
       generateSummaryInBackground(sessionId, profile.name, profile.language);
 
-      // Generate TTS audio for the summary using ElevenLabs (same voice as questions)
+      // Generate TTS summary using same ElevenLabs voice
       const voiceId = profile.voiceId || undefined;
       const fullSummaryText = summaryParts.join(" ");
       await mkdir(audioDir, { recursive: true });
@@ -197,22 +235,17 @@ export async function POST(req: NextRequest) {
         const summaryFileName = `assessment-summary-${sessionId}.mp3`;
         await writeFile(path.join(audioDir, summaryFileName), summaryBuffer);
         summaryTwiml = `<Play>${baseUrl}/api/audio/${summaryFileName}</Play>`;
-      } catch (err) {
-        console.error("Summary TTS failed, falling back to Say:", err);
+      } catch {
         summaryTwiml = summaryParts.map(s => `<Say>${s}</Say>`).join("\n        <Pause length=\"1\"/>\n        ");
       }
 
-      const twiml = `<Response>
-        ${summaryTwiml}
-      </Response>`;
-
-      return new NextResponse(twiml, {
+      return new NextResponse(`<Response>${summaryTwiml}</Response>`, {
         headers: { "Content-Type": "text/xml" },
       });
     }
 
     // ============================================================
-    // PHASE: COGNITIVE QUESTIONS — save answer, evaluate in bg, next question
+    // COGNITIVE QUESTIONS — save recording, evaluate in bg, next question
     // ============================================================
     const currentAnswer = session.answers[answerIndex];
     if (!currentAnswer) {
@@ -221,23 +254,26 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Save answer to DB (fire-and-forget)
-    prisma.assessmentAnswer.update({
-      where: { id: currentAnswer.id },
-      data: { elderAnswer: elderAnswer || null },
-    }).catch((err: unknown) => console.error("Answer save failed:", err));
+    // Get recording URL from Record callback
+    const recordingUrl = (formData?.get("RecordingUrl") as string) || "";
 
-    // Start background Gemini evaluation (fire-and-forget)
-    if (elderAnswer && elderAnswer.trim()) {
-      evaluateInBackground(
+    // Save recording URL to DB immediately
+    if (recordingUrl) {
+      prisma.assessmentAnswer.update({
+        where: { id: currentAnswer.id },
+        data: { recordingUrl: `${recordingUrl}.mp3` },
+      }).catch((err: unknown) => console.error("Recording URL save failed:", err));
+
+      // Start background: fetch recording → transcribe → evaluate → save
+      processAnswerInBackground(
         currentAnswer.id,
+        recordingUrl,
         currentAnswer.questionText,
         currentAnswer.correctAnswer,
-        elderAnswer,
         profile.language
       );
     } else {
-      // No answer — mark as UNCLEAR
+      // No recording — mark as unclear
       prisma.assessmentAnswer.update({
         where: { id: currentAnswer.id },
         data: { result: "UNCLEAR" },
@@ -248,8 +284,9 @@ export async function POST(req: NextRequest) {
     const isLastCognitive = nextIndex >= totalQuestions;
 
     if (isLastCognitive) {
-      // All cognitive questions done — ask the emotional question
+      // All cognitive questions done — ask emotional question
       const isArabic = profile.language === "ar";
+      const lang = isArabic ? "ar-SA" : "en-US";
       const emotionalQ = isArabic
         ? "شكراً على إجاباتك. الآن، كيف تشعر اليوم؟ هل هناك شيء يزعجك أو يقلقك؟"
         : "Thanks for answering those questions. Now, how are you feeling today? Is there anything bothering you or on your mind?";
@@ -257,7 +294,10 @@ export async function POST(req: NextRequest) {
       const twiml = `<Response>
         <Pause length="1"/>
         <Say>${emotionalQ}</Say>
-        ${buildGatherTwiml(baseUrl!, sessionId, answerIndex, profile.language, "emotional")}
+        <Gather input="speech" speechTimeout="3" language="${lang}" action="${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}&amp;phase=emotional" method="POST">
+        </Gather>
+        <Say>I didn't hear anything.</Say>
+        <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}&amp;phase=emotional</Redirect>
       </Response>`;
 
       return new NextResponse(twiml, {
@@ -265,7 +305,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // More cognitive questions — play next one immediately (no validation delay)
+    // More cognitive questions — play next immediately
     const nextAnswer = session.answers[nextIndex];
     const pregenFileName = `assessment-q-${nextAnswer.id}.mp3`;
     const pregenPath = path.join(audioDir, pregenFileName);
@@ -275,7 +315,6 @@ export async function POST(req: NextRequest) {
       await access(pregenPath);
       nextQAudioTag = `<Play>${baseUrl}/api/audio/${pregenFileName}</Play>`;
     } catch {
-      // Fallback: generate on-the-fly
       let nextQText = `Question ${nextIndex + 1}: ${nextAnswer.questionText}`;
       try {
         nextQText = await generateAssessmentQuestionAudio({
@@ -301,7 +340,9 @@ export async function POST(req: NextRequest) {
 
     const twiml = `<Response>
       ${nextQAudioTag}
-      ${buildGatherTwiml(baseUrl!, sessionId, nextIndex, profile.language)}
+      <Record maxLength="15" playBeep="false" timeout="3" action="${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${nextIndex}" method="POST"/>
+      <Say>I didn't hear anything. Let's move on.</Say>
+      <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${nextIndex}</Redirect>
     </Response>`;
 
     return new NextResponse(twiml, {
@@ -336,11 +377,10 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        const twiml = `<Response>
+        return new NextResponse(`<Response>
           <Say>Let's move on.</Say>
-          <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${nextIndex}&amp;speechResult=</Redirect>
-        </Response>`;
-        return new NextResponse(twiml, { headers: { "Content-Type": "text/xml" } });
+          <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${nextIndex}</Redirect>
+        </Response>`, { headers: { "Content-Type": "text/xml" } });
       }
     } catch (innerErr) {
       console.error("Error in error handler:", innerErr);

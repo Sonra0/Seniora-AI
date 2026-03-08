@@ -345,36 +345,51 @@ export default function AssessmentPage() {
               {latestSession.summary && (
                 <p className="text-sm text-gray-700 mb-4">{latestSession.summary}</p>
               )}
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {latestSession.answers.map((a, i) => (
-                  <div key={a.id} className="flex items-start gap-3 py-2 border-b border-gray-100 last:border-0">
-                    <span
-                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
-                        a.result === "CORRECT"
-                          ? "bg-green-100 text-green-700"
-                          : a.result === "WRONG"
-                          ? "bg-red-100 text-red-700"
-                          : "bg-gray-100 text-gray-500"
-                      }`}
-                    >
-                      {i + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900">{a.questionText}</p>
-                      <p className="text-xs text-gray-500">
-                        Correct: {a.correctAnswer}
-                        {a.elderAnswer && (
-                          <> &middot; Answer: <span className={a.result === "CORRECT" ? "text-green-600" : "text-red-600"}>{a.elderAnswer}</span></>
+                  <div key={a.id} className="rounded-lg border border-gray-100 p-3">
+                    <div className="flex items-start gap-3">
+                      <span
+                        className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                          a.result === "CORRECT"
+                            ? "bg-green-100 text-green-700"
+                            : a.result === "WRONG"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-gray-100 text-gray-500"
+                        }`}
+                      >
+                        {i + 1}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900">{a.questionText}</p>
+                        <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-medium text-gray-400 uppercase w-16 shrink-0">Answer:</span>
+                            <span className={`text-sm ${a.result === "CORRECT" ? "text-green-700 font-medium" : a.result === "WRONG" ? "text-red-600" : "text-gray-400 italic"}`}>
+                              {a.elderAnswer || "No answer"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-medium text-gray-400 uppercase w-16 shrink-0">Correct:</span>
+                            <span className="text-sm text-gray-700">{a.correctAnswer}</span>
+                          </div>
+                        </div>
+                        {a.recordingUrl && (
+                          <div className="mt-2">
+                            <audio controls preload="none" className="h-8 w-full max-w-xs">
+                              <source src={a.recordingUrl} type="audio/mpeg" />
+                            </audio>
+                          </div>
                         )}
-                      </p>
+                      </div>
+                      <span
+                        className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                          a.result === "CORRECT" ? "bg-green-100 text-green-700" : a.result === "WRONG" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-400"
+                        }`}
+                      >
+                        {a.result || "—"}
+                      </span>
                     </div>
-                    <span
-                      className={`text-xs font-medium ${
-                        a.result === "CORRECT" ? "text-green-600" : a.result === "WRONG" ? "text-red-600" : "text-gray-400"
-                      }`}
-                    >
-                      {a.result || "—"}
-                    </span>
                   </div>
                 ))}
               </div>
@@ -454,14 +469,28 @@ export default function AssessmentPage() {
                       </div>
                     </button>
                     {expandedSession === s.id && (
-                      <div className="px-3 pb-3">
+                      <div className="px-3 pb-3 space-y-2">
                         {s.summary && <p className="text-sm text-gray-600 mb-2">{s.summary}</p>}
                         {s.answers.map((a) => (
-                          <div key={a.id} className="flex items-center gap-2 py-1 text-xs text-gray-600">
-                            <span className={`font-medium ${a.result === "CORRECT" ? "text-green-600" : a.result === "WRONG" ? "text-red-600" : "text-gray-400"}`}>
-                              {a.result === "CORRECT" ? "\u2713" : a.result === "WRONG" ? "\u2717" : "?"}
-                            </span>
-                            <span>{a.questionText}</span>
+                          <div key={a.id} className="rounded border border-gray-100 p-2">
+                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                              <span className={`font-bold ${a.result === "CORRECT" ? "text-green-600" : a.result === "WRONG" ? "text-red-600" : "text-gray-400"}`}>
+                                {a.result === "CORRECT" ? "\u2713" : a.result === "WRONG" ? "\u2717" : "?"}
+                              </span>
+                              <span className="font-medium text-gray-800">{a.questionText}</span>
+                            </div>
+                            <div className="ml-5 mt-1 text-xs text-gray-500">
+                              <span>Answer: <span className={a.result === "CORRECT" ? "text-green-600" : "text-red-500"}>{a.elderAnswer || "—"}</span></span>
+                              <span className="mx-1">&middot;</span>
+                              <span>Correct: {a.correctAnswer}</span>
+                            </div>
+                            {a.recordingUrl && (
+                              <div className="ml-5 mt-1">
+                                <audio controls preload="none" className="h-7 w-full max-w-xs">
+                                  <source src={a.recordingUrl} type="audio/mpeg" />
+                                </audio>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
