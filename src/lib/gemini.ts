@@ -201,6 +201,68 @@ Respond in this exact JSON format only, no markdown:
   return JSON.parse(cleaned);
 }
 
+export async function evaluateEmotionalResponse(context: {
+  elderlyName: string;
+  emotionalAnswer: string;
+  language: string;
+}): Promise<{ sentiment: "POSITIVE" | "NEGATIVE"; response: string }> {
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+  const lang = context.language === "ar" ? "Arabic" : "English";
+  const prompt = `You are a warm, caring assistant on a phone call with an elderly person named ${context.elderlyName}.
+They were just asked "How are you feeling today?" and responded: "${context.emotionalAnswer}"
+
+1. Determine if their emotional state is POSITIVE or NEGATIVE.
+   - POSITIVE: they feel fine, good, happy, okay, content, or neutral.
+   - NEGATIVE: they feel sad, lonely, anxious, scared, unwell, in pain, confused, or distressed.
+   - When in doubt, lean toward POSITIVE.
+
+2. Generate a warm, empathetic spoken response in ${lang}:
+   - If POSITIVE: A brief, cheerful, encouraging response (1-2 sentences). Be energetic and uplifting!
+   - If NEGATIVE: A brief, deeply compassionate response acknowledging their feelings (1-2 sentences). Be gentle and caring. Do NOT mention emergency calls — that will be handled separately.
+
+Respond in this exact JSON format only, no markdown:
+{"sentiment": "POSITIVE", "response": "That's wonderful to hear! I'm so glad you're doing well today."}`;
+
+  const result = await model.generateContent(prompt);
+  const text = result.response.text().trim();
+  const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  return JSON.parse(cleaned);
+}
+
+export async function generateAnswerReview(context: {
+  elderlyName: string;
+  answers: { questionText: string; correctAnswer: string; elderAnswer: string | null; result: string | null }[];
+  language: string;
+}): Promise<string> {
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+  const lang = context.language === "ar" ? "Arabic" : "English";
+  const totalCorrect = context.answers.filter(a => a.result === "CORRECT").length;
+
+  const prompt = `You are a warm, energetic, caring assistant on the phone with ${context.elderlyName}.
+You just finished a fun cognitive check-in. Now review their answers conversationally in ${lang}.
+
+Results:
+${context.answers.map((a, i) => `Q${i + 1}: "${a.questionText}" | Correct: "${a.correctAnswer}" | Their answer: "${a.elderAnswer || "no answer"}" | ${a.result}`).join("\n")}
+
+Score: ${totalCorrect}/${context.answers.length}
+
+Guidelines:
+- Start with an encouraging opener about how they did overall.
+- For CORRECT answers: celebrate briefly ("You nailed that one!" / "Exactly right!").
+- For WRONG answers: gently share the correct answer without making them feel bad ("That one was tricky — it's actually [answer]").
+- For UNCLEAR: skip gracefully ("I couldn't quite catch that one, but no worries").
+- End with a warm, uplifting goodbye. Tell them to take care and you'll talk again soon.
+- Keep the whole thing under 200 words. Be conversational, not like reading a report.
+- Be energetic and positive throughout!
+
+Return ONLY the spoken text, no JSON, no formatting.`;
+
+  const result = await model.generateContent(prompt);
+  return result.response.text().trim();
+}
+
 // ---------------------------------------------------------------------------
 // Care command parsing (used by WhatsApp & Telegram assistants)
 // ---------------------------------------------------------------------------
