@@ -39,6 +39,7 @@ model ElderlyProfile {
   assessmentQuestions AssessmentQuestion[]
   assessmentConfig    AssessmentConfig?
   assessmentSessions  AssessmentSession[]
+  telegramConversations TelegramConversation[]
   createdAt        DateTime     @default(now())
 }
 
@@ -50,8 +51,12 @@ model Caregiver {
   phoneVerified    Boolean        @default(false)
   userId           String?
   user             User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  telegramChatId    String?   @unique
+  linkCode          String?   @unique
+  linkCodeExpiresAt DateTime?
   elderlyProfileId String
   elderlyProfile   ElderlyProfile @relation(fields: [elderlyProfileId], references: [id], onDelete: Cascade)
+  telegramConversations TelegramConversation[]
   createdAt        DateTime       @default(now())
 }
 
@@ -189,6 +194,22 @@ model AssessmentSession {
   vocalAnalysis      Json?
   answers            AssessmentAnswer[]
   createdAt          DateTime           @default(now())
+}
+
+model TelegramConversation {
+  id                   String          @id @default(cuid())
+  telegramChatId       String          @unique
+  telegramUserId       String
+  caregiverId          String?
+  caregiver            Caregiver?      @relation(fields: [caregiverId], references: [id])
+  elderlyProfileId     String?
+  elderlyProfile       ElderlyProfile? @relation(fields: [elderlyProfileId], references: [id])
+  intent               String          @default("NONE")
+  state                Json?
+  lastUserMessage      String?
+  lastAssistantMessage String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
 }
 
 model AssessmentAnswer {
