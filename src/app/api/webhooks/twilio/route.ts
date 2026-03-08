@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendTelegramNotification } from "@/lib/telegram-api";
 
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
@@ -22,12 +23,27 @@ export async function POST(req: NextRequest) {
     // Only deactivate one-time reminders; recurring ones should keep firing
     const reminder = await prisma.reminder.findUnique({
       where: { id: log.reminderId },
+      include: { elderlyProfile: true, medication: true },
     });
     if (reminder && reminder.recurrence === "NONE") {
       await prisma.reminder.update({
         where: { id: log.reminderId },
         data: { active: false },
       });
+    }
+
+    // Send Telegram notification for confirmation
+    if (reminder) {
+      try {
+        const name = reminder.elderlyProfile.name;
+        const task = reminder.medication?.name || reminder.title;
+        await sendTelegramNotification(
+          reminder.elderlyProfileId,
+          `${name} confirmed their ${reminder.scheduledTime} ${task} reminder.`
+        );
+      } catch (err) {
+        console.error("Telegram notification error:", err);
+      }
     }
 
     return new NextResponse(
