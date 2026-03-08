@@ -200,5 +200,6 @@ model AssessmentAnswer {
   elderAnswer   String?
   result        AnswerResult?
   recordingUrl  String?
+  orderIndex    Int              @default(0)
   createdAt     DateTime         @default(now())
 }

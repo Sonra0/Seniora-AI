@@ -63,10 +63,11 @@ export async function POST(
       date: todayStr,
       status: "PENDING",
       answers: {
-        create: selected.map((q) => ({
+        create: selected.map((q, i) => ({
           questionId: q.id,
           questionText: q.questionText,
           correctAnswer: q.correctAnswer,
+          orderIndex: i,
         })),
       },
     },

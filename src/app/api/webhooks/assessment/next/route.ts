@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
     const session = await prisma.assessmentSession.findUnique({
       where: { id: sessionId },
       include: {
-        answers: { orderBy: { createdAt: "asc" } },
+        answers: { orderBy: { orderIndex: "asc" } },
         elderlyProfile: true,
       },
     });
@@ -152,7 +152,7 @@ export async function POST(req: NextRequest) {
     if (isLastQuestion) {
       const allAnswers = await prisma.assessmentAnswer.findMany({
         where: { sessionId },
-        orderBy: { createdAt: "asc" },
+        orderBy: { orderIndex: "asc" },
       });
 
       const totalCorrect = allAnswers.filter((a) => a.result === "CORRECT").length;
@@ -258,11 +258,57 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("Assessment /next webhook error:", err);
-    // Return valid TwiML so the call doesn't break
-    const nextIndex = answerIndex + 1;
+
+    // Try to determine if this was the last question so we can complete the session
+    try {
+      const session = await prisma.assessmentSession.findUnique({
+        where: { id: sessionId },
+        include: { answers: { orderBy: { orderIndex: "asc" } } },
+      });
+
+      if (session) {
+        const nextIndex = answerIndex + 1;
+        const isLast = nextIndex >= session.answers.length;
+
+        if (isLast) {
+          // Complete the session with whatever data we have
+          const allAnswers = session.answers;
+          const totalCorrect = allAnswers.filter((a) => a.result === "CORRECT").length;
+          const score = allAnswers.length > 0 ? totalCorrect / allAnswers.length : 0;
+
+          await prisma.assessmentSession.update({
+            where: { id: sessionId },
+            data: {
+              status: "COMPLETED",
+              overallScore: score,
+              severity: score >= 0.75 ? "GREEN" : score >= 0.5 ? "YELLOW" : "RED",
+            },
+          });
+
+          const twiml = `<Response>
+            <Say>Thank you for your time today. Goodbye!</Say>
+          </Response>`;
+          return new NextResponse(twiml, {
+            headers: { "Content-Type": "text/xml" },
+          });
+        }
+
+        // Not the last question — skip to next
+        const twiml = `<Response>
+          <Say>Let's move on to the next question.</Say>
+          <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${nextIndex}</Redirect>
+        </Response>`;
+        return new NextResponse(twiml, {
+          headers: { "Content-Type": "text/xml" },
+        });
+      }
+    } catch (innerErr) {
+      console.error("Error in assessment error handler:", innerErr);
+    }
+
+    // Fallback: end the call gracefully
     const twiml = `<Response>
-      <Say>Let's move on to the next question.</Say>
-      <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${nextIndex}</Redirect>
+      <Say>Thank you for your time today. Goodbye!</Say>
     </Response>`;
     return new NextResponse(twiml, {
       headers: { "Content-Type": "text/xml" },

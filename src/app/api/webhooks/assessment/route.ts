@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
 
     const session = await prisma.assessmentSession.findUnique({
       where: { id: sessionId },
-      include: { answers: { orderBy: { createdAt: "asc" } } },
+      include: { answers: { orderBy: { orderIndex: "asc" } } },
     });
 
     if (!session || !session.answers[answerIndex]) {

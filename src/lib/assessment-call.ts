@@ -42,7 +42,7 @@ export async function executeAssessmentCall(sessionId: string) {
     include: {
       elderlyProfile: true,
       config: true,
-      answers: { orderBy: { createdAt: "asc" } },
+      answers: { orderBy: { orderIndex: "asc" } },
     },
   });
 
