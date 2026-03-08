@@ -297,13 +297,14 @@ export default function AssessmentPage() {
                         score={(selectedSession?.overallScore ?? 0) * 100}
                         label="Cognitive Score"
                         severity={selectedSession?.severity}
-                        size="lg"
+                        size="sm"
                       />
                     </div>
                     <div className="flex flex-col items-center">
                       <ScoreGauge
                         score={selectedSession?.vocalAnalysis?.mood?.wellnessScore ?? 0}
                         label="Wellness Score"
+                        color="#10b981"
                         size="sm"
                       />
                     </div>

@@ -17,8 +17,12 @@ const metricLabels: Record<string, string> = {
 export function VocalRadarChart({ data }: RadarChartProps) {
   if (!data || Object.keys(data).length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-500 text-sm">
-        No vocal analysis data available
+      <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+        <svg className="w-10 h-10 text-gray-600 mb-3" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+        </svg>
+        <p className="text-sm font-medium text-gray-400">Coming Soon</p>
+        <p className="text-xs text-gray-600 mt-1">Vocal biomarker analysis will appear here</p>
       </div>
     );
   }

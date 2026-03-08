@@ -6,6 +6,7 @@ interface ScoreGaugeProps {
   score: number;
   label: string;
   severity?: "GREEN" | "YELLOW" | "RED" | null;
+  color?: string;
   size?: "sm" | "lg";
 }
 
@@ -19,9 +20,10 @@ export function ScoreGauge({
   score,
   label,
   severity,
+  color: colorProp,
   size = "lg",
 }: ScoreGaugeProps) {
-  const color = severity ? severityColors[severity] : "#6366f1";
+  const color = colorProp || (severity ? severityColors[severity] : "#6366f1");
   const height = size === "lg" ? 200 : 140;
 
   return (
