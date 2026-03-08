@@ -45,9 +45,122 @@ const features = [
   },
 ];
 
+const techPartners = [
+  {
+    name: "Google Cloud",
+    role: "Infrastructure & Authentication",
+    logo: (
+      <svg viewBox="0 0 24 24" className="h-8 w-8" fill="currentColor">
+        <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"/>
+      </svg>
+    ),
+  },
+  {
+    name: "Gemini AI",
+    role: "Conversational Intelligence",
+    logo: (
+      <svg viewBox="0 0 24 24" className="h-8 w-8" fill="currentColor">
+        <path d="M12 0C5.352 0 0 5.352 0 12s5.352 12 12 12 12-5.352 12-12S18.648 0 12 0zm0 2.4c5.28 0 9.6 4.32 9.6 9.6s-4.32 9.6-9.6 9.6S2.4 17.28 2.4 12 6.72 2.4 12 2.4zm-1.2 4.8v4.8H6v2.4h4.8V19.2h2.4v-4.8H18v-2.4h-4.8V7.2h-2.4z"/>
+      </svg>
+    ),
+  },
+  {
+    name: "Firebase",
+    role: "Auth & Real-time Data",
+    logo: (
+      <svg viewBox="0 0 24 24" className="h-8 w-8" fill="currentColor">
+        <path d="M3.89 15.672L6.255.461A.542.542 0 0 1 7.27.288l2.543 4.771zm16.794 3.692l-2.25-14a.54.54 0 0 0-.919-.295L3.316 19.365l7.856 4.427a1.621 1.621 0 0 0 1.588 0zM14.3 7.147l-1.82-3.482a.542.542 0 0 0-.96 0L3.53 17.984z"/>
+      </svg>
+    ),
+  },
+  {
+    name: "ElevenLabs",
+    role: "Human-like Voice Synthesis",
+    logo: (
+      <svg viewBox="0 0 24 24" className="h-8 w-8" fill="currentColor">
+        <rect x="7" y="2" width="3" height="20" rx="1.5"/>
+        <rect x="14" y="2" width="3" height="20" rx="1.5"/>
+      </svg>
+    ),
+  },
+  {
+    name: "Gemini CLI",
+    role: "AI Development Tooling",
+    logo: (
+      <svg viewBox="0 0 24 24" className="h-8 w-8" fill="currentColor">
+        <path d="M7 8l-4 4 4 4M17 8l4 4-4 4M14 4l-4 16"/>
+      </svg>
+    ),
+  },
+];
+
 export default function FeatureGrid() {
   return (
     <section className="mx-auto max-w-6xl px-6 py-24">
+      {/* Powered By */}
+      <FadeIn>
+        <div className="mb-24">
+          <p
+            className="text-center text-xs font-semibold uppercase tracking-[0.2em] mb-3"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Built with
+          </p>
+          <h3
+            className="text-center text-2xl font-bold tracking-tight sm:text-3xl mb-4"
+            style={{ color: "var(--text-primary)" }}
+          >
+            Industry-Leading Technology
+          </h3>
+          <p
+            className="mx-auto max-w-xl text-center text-sm mb-12"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            Powered by the Google ecosystem and ElevenLabs — the same technology behind the world&apos;s most advanced AI products.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            {techPartners.map((partner, i) => (
+              <FadeIn key={partner.name} delay={i * 0.08}>
+                <div
+                  className="group flex flex-col items-center gap-3 rounded-2xl border p-5 text-center transition-all duration-300 hover:border-[var(--accent)] hover:-translate-y-1 hover:shadow-lg"
+                  style={{
+                    borderColor: "var(--border-default)",
+                    backgroundColor: "var(--card-bg)",
+                  }}
+                >
+                  <div
+                    className="transition-colors duration-200 group-hover:text-[var(--accent)]"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    {partner.logo}
+                  </div>
+                  <div>
+                    <p
+                      className="text-sm font-bold"
+                      style={{ color: "var(--text-primary)" }}
+                    >
+                      {partner.name}
+                    </p>
+                    <p
+                      className="text-xs mt-0.5 leading-tight"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {partner.role}
+                    </p>
+                  </div>
+                </div>
+              </FadeIn>
+            ))}
+          </div>
+          <p
+            className="text-center text-xs mt-6"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Created by <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>Antigravity</span> &middot; Powered by Google Cloud, Gemini API, Firebase Auth &amp; ElevenLabs TTS
+          </p>
+        </div>
+      </FadeIn>
+
       <FadeIn>
         <h2
           className="text-center text-3xl font-bold tracking-tight sm:text-4xl"
