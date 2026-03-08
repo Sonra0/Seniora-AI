@@ -5,6 +5,28 @@ import { generateAssessmentGreeting, generateAssessmentQuestionAudio } from "./g
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
+function escapeXml(str: string) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// Try TTS, return Play tag on success or Say tag on failure
+async function generateAudioTag(
+  text: string,
+  fileName: string,
+  audioDir: string,
+  baseUrl: string,
+  voiceId?: string
+): Promise<string> {
+  try {
+    const buf = await textToSpeech(text, voiceId);
+    await writeFile(path.join(audioDir, fileName), buf);
+    return `<Play>${baseUrl}/api/audio/${fileName}</Play>`;
+  } catch (err) {
+    console.warn(`TTS failed for ${fileName}, using <Say> fallback:`, err);
+    return `<Say>${escapeXml(text)}</Say>`;
+  }
+}
+
 export async function executeAssessmentCall(sessionId: string) {
   const session = await prisma.assessmentSession.findUnique({
     where: { id: sessionId },
@@ -25,40 +47,40 @@ export async function executeAssessmentCall(sessionId: string) {
   try {
     const profile = session.elderlyProfile;
     const voiceId = profile.voiceId || undefined;
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL!;
+    const audioDir = path.join(process.cwd(), "public", "audio");
+    await mkdir(audioDir, { recursive: true });
 
     const hour = new Date().getHours();
     const timeOfDay = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+    const isArabic = profile.language === "ar";
 
+    // Generate greeting script (Gemini text generation — not TTS, so unlikely to rate-limit)
     const greetingScript = await generateAssessmentGreeting({
       elderlyName: profile.name,
       language: profile.language,
       timeOfDay,
     });
 
-    const greetingBuffer = await textToSpeech(greetingScript, voiceId);
-    const audioDir = path.join(process.cwd(), "public", "audio");
-    await mkdir(audioDir, { recursive: true });
-    const greetingFileName = `assessment-greeting-${sessionId}.mp3`;
-    await writeFile(path.join(audioDir, greetingFileName), greetingBuffer);
-    const greetingUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/audio/${greetingFileName}`;
+    // Pre-generate ALL audio in parallel — each one falls back to <Say> independently
+    const greetingPromise = generateAudioTag(
+      greetingScript, `assessment-greeting-${sessionId}.mp3`, audioDir, baseUrl, voiceId
+    );
 
-    // Pre-generate ALL question audio in parallel (eliminates per-question latency during call)
-    const questionAudioPromises = session.answers.map(async (answer: { id: string; questionText: string }, idx: number) => {
-      const qScript = await generateAssessmentQuestionAudio({
-        elderlyName: profile.name,
-        questionText: answer.questionText,
-        questionNumber: idx + 1,
-        totalQuestions: session.answers.length,
-        language: profile.language,
-      });
-      const qBuffer = await textToSpeech(qScript, voiceId);
-      const qFileName = `assessment-q-${answer.id}.mp3`;
-      await writeFile(path.join(audioDir, qFileName), qBuffer);
-      return `${process.env.NEXT_PUBLIC_APP_URL}/api/audio/${qFileName}`;
+    const questionPromises = session.answers.map(async (answer: { id: string; questionText: string }, idx: number) => {
+      let qScript = `Question ${idx + 1}: ${answer.questionText}`;
+      try {
+        qScript = await generateAssessmentQuestionAudio({
+          elderlyName: profile.name,
+          questionText: answer.questionText,
+          questionNumber: idx + 1,
+          totalQuestions: session.answers.length,
+          language: profile.language,
+        });
+      } catch { /* use plain question text */ }
+      return generateAudioTag(qScript, `assessment-q-${answer.id}.mp3`, audioDir, baseUrl, voiceId);
     });
 
-    // Pre-generate emotional question, "didn't hear" fallback, and "goodbye" audio in parallel with questions
-    const isArabic = profile.language === "ar";
     const emotionalQText = isArabic
       ? "أحسنت! الآن أخبرني، كيف حالك اليوم؟ كيف تشعر؟"
       : "Great job with those! Now tell me, how are you doing today? How are you feeling?";
@@ -68,58 +90,33 @@ export async function executeAssessmentCall(sessionId: string) {
     const didntHearShortText = isArabic
       ? "لم أسمع شيئاً."
       : "I didn't hear anything.";
+    const emergencyAskText = isArabic
+      ? "أنا آسف لسماع ذلك. هل تريد أن أتصل بشخص من عائلتك أو طبيبك الآن؟"
+      : "I'm sorry to hear that. Would you like me to call someone from your family or your doctor right now?";
 
-    const emotionalAudioPromise = (async () => {
-      const buf = await textToSpeech(emotionalQText, voiceId);
-      const fileName = `assessment-emotional-${sessionId}.mp3`;
-      await writeFile(path.join(audioDir, fileName), buf);
-      return fileName;
-    })();
-    const didntHearAudioPromise = (async () => {
-      const buf = await textToSpeech(didntHearText, voiceId);
-      const fileName = `assessment-noanswer-${sessionId}.mp3`;
-      await writeFile(path.join(audioDir, fileName), buf);
-      return fileName;
-    })();
-    const didntHearShortAudioPromise = (async () => {
-      const buf = await textToSpeech(didntHearShortText, voiceId);
-      const fileName = `assessment-noanswer-short-${sessionId}.mp3`;
-      await writeFile(path.join(audioDir, fileName), buf);
-      return fileName;
-    })();
-    const emergencyAskAudioPromise = (async () => {
-      try {
-        const emergencyAskText = isArabic
-          ? "أنا آسف لسماع ذلك. هل تريد أن أتصل بشخص من عائلتك أو طبيبك الآن؟"
-          : "I'm sorry to hear that. Would you like me to call someone from your family or your doctor right now?";
-        const buf = await textToSpeech(emergencyAskText, voiceId);
-        const fileName = `assessment-emergency-ask-${sessionId}.mp3`;
-        await writeFile(path.join(audioDir, fileName), buf);
-        return fileName;
-      } catch (err) {
-        console.warn("Emergency-ask audio pre-generation failed (will use fallback):", err);
-        return null;
-      }
-    })();
+    const emotionalPromise = generateAudioTag(emotionalQText, `assessment-emotional-${sessionId}.mp3`, audioDir, baseUrl, voiceId);
+    const didntHearPromise = generateAudioTag(didntHearText, `assessment-noanswer-${sessionId}.mp3`, audioDir, baseUrl, voiceId);
+    const didntHearShortPromise = generateAudioTag(didntHearShortText, `assessment-noanswer-short-${sessionId}.mp3`, audioDir, baseUrl, voiceId);
+    const emergencyAskPromise = generateAudioTag(emergencyAskText, `assessment-emergency-ask-${sessionId}.mp3`, audioDir, baseUrl, voiceId);
 
-    const [questionUrls, emotionalFileName, didntHearFileName, didntHearShortFileName, emergencyAskFileName] = await Promise.all([
-      Promise.all(questionAudioPromises),
-      emotionalAudioPromise,
-      didntHearAudioPromise,
-      didntHearShortAudioPromise,
-      emergencyAskAudioPromise,
+    const [greetingTag, questionTags, , , ,] = await Promise.all([
+      greetingPromise,
+      Promise.all(questionPromises),
+      emotionalPromise,
+      didntHearPromise,
+      didntHearShortPromise,
+      emergencyAskPromise,
     ]);
-    const q1Url = questionUrls[0];
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
-    const didntHearUrl = `${baseUrl}/api/audio/${didntHearFileName}`;
+    const q1Tag = questionTags[0];
+    const didntHearTag = await didntHearPromise;
 
     const twiml = `<Response>
-      <Play>${greetingUrl}</Play>
+      ${greetingTag}
       <Pause length="1"/>
-      <Play>${q1Url}</Play>
+      ${q1Tag}
       <Record maxLength="15" playBeep="false" timeout="3" action="${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=0" method="POST"/>
-      <Play>${didntHearUrl}</Play>
+      ${didntHearTag}
       <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=0</Redirect>
     </Response>`;
 
