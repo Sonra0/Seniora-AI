@@ -186,8 +186,24 @@ export async function POST(req: NextRequest) {
       // Generate detailed summary in background
       generateSummaryInBackground(sessionId, profile.name, profile.language);
 
+      // Generate TTS audio for the summary using ElevenLabs (same voice as questions)
+      const voiceId = profile.voiceId || undefined;
+      const fullSummaryText = summaryParts.join(" ");
+      await mkdir(audioDir, { recursive: true });
+
+      let summaryTwiml: string;
+      try {
+        const summaryBuffer = await textToSpeech(fullSummaryText, voiceId);
+        const summaryFileName = `assessment-summary-${sessionId}.mp3`;
+        await writeFile(path.join(audioDir, summaryFileName), summaryBuffer);
+        summaryTwiml = `<Play>${baseUrl}/api/audio/${summaryFileName}</Play>`;
+      } catch (err) {
+        console.error("Summary TTS failed, falling back to Say:", err);
+        summaryTwiml = summaryParts.map(s => `<Say>${s}</Say>`).join("\n        <Pause length=\"1\"/>\n        ");
+      }
+
       const twiml = `<Response>
-        ${summaryParts.map(s => `<Say>${s}</Say>`).join("\n        <Pause length=\"1\"/>\n        ")}
+        ${summaryTwiml}
       </Response>`;
 
       return new NextResponse(twiml, {
