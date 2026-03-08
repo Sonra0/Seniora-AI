@@ -184,9 +184,10 @@ model AssessmentSession {
   status           AssessmentStatus   @default(PENDING)
   summary          String?
   severity         AssessmentSeverity?
-  twilioCallSid    String?
-  answers          AssessmentAnswer[]
-  createdAt        DateTime           @default(now())
+  twilioCallSid      String?
+  emotionalResponse  String?
+  answers            AssessmentAnswer[]
+  createdAt          DateTime           @default(now())
 }
 
 model AssessmentAnswer {

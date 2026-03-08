@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import {
   evaluateAssessmentAnswer,
   generateAssessmentQuestionAudio,
-  generateAssessmentClosing,
   generateAssessmentSummary,
 } from "@/lib/gemini";
 import { textToSpeech } from "@/lib/elevenlabs";
@@ -14,68 +13,90 @@ function buildGatherTwiml(
   baseUrl: string,
   sessionId: string,
   answerIndex: number,
-  language: string
+  language: string,
+  phase?: string
 ): string {
   const lang = language === "ar" ? "ar-SA" : "en-US";
-  return `<Gather input="speech" speechTimeout="3" language="${lang}" action="${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}" method="POST">
+  const phaseParam = phase ? `&amp;phase=${phase}` : "";
+  return `<Gather input="speech" speechTimeout="3" language="${lang}" action="${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}${phaseParam}" method="POST">
       </Gather>
       <Say>I didn't hear anything. Let's move on.</Say>
-      <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}&amp;speechResult=</Redirect>`;
+      <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}${phaseParam}&amp;speechResult=</Redirect>`;
 }
 
-// Fire-and-forget: generate summary after call ends
-async function generateSummaryInBackground(
+// Fire-and-forget: evaluate a single answer via Gemini and save to DB
+function evaluateInBackground(
+  answerId: string,
+  questionText: string,
+  correctAnswer: string,
+  elderAnswer: string,
+  language: string
+) {
+  evaluateAssessmentAnswer({ questionText, correctAnswer, elderAnswer, language })
+    .then(async (evaluation) => {
+      await prisma.assessmentAnswer.update({
+        where: { id: answerId },
+        data: { result: evaluation.result },
+      });
+    })
+    .catch((err: unknown) => console.error("Background evaluation failed:", err));
+}
+
+// Fire-and-forget: generate summary
+function generateSummaryInBackground(
   sessionId: string,
   elderlyName: string,
   language: string
 ) {
-  try {
-    const allAnswers = await prisma.assessmentAnswer.findMany({
-      where: { sessionId },
-      orderBy: { orderIndex: "asc" },
-    });
+  (async () => {
+    try {
+      const allAnswers = await prisma.assessmentAnswer.findMany({
+        where: { sessionId },
+        orderBy: { orderIndex: "asc" },
+      });
+      const todayStr = new Date().toLocaleDateString("en-CA");
+      const report = await generateAssessmentSummary({
+        elderlyName,
+        date: todayStr,
+        answers: allAnswers.map((a: { questionText: string; correctAnswer: string; elderAnswer: string | null; result: string | null }) => ({
+          questionText: a.questionText,
+          correctAnswer: a.correctAnswer,
+          elderAnswer: a.elderAnswer,
+          result: a.result || "UNCLEAR",
+        })),
+        language,
+      });
+      await prisma.assessmentSession.update({
+        where: { id: sessionId },
+        data: { summary: report.summary, severity: report.severity },
+      });
+    } catch (err) {
+      console.error("Background summary failed:", err);
+    }
+  })();
+}
 
-    const totalCorrect = allAnswers.filter((a: { result: string | null }) => a.result === "CORRECT").length;
-    const score = allAnswers.length > 0 ? totalCorrect / allAnswers.length : 0;
-    const todayStr = new Date().toLocaleDateString("en-CA");
-
-    const report = await generateAssessmentSummary({
-      elderlyName,
-      date: todayStr,
-      answers: allAnswers.map((a: { questionText: string; correctAnswer: string; elderAnswer: string | null; result: string | null }) => ({
-        questionText: a.questionText,
-        correctAnswer: a.correctAnswer,
-        elderAnswer: a.elderAnswer,
-        result: a.result || "UNCLEAR",
-      })),
-      language,
-    });
-
-    await prisma.assessmentSession.update({
-      where: { id: sessionId },
-      data: {
-        summary: report.summary,
-        severity: report.severity,
-      },
-    });
-  } catch (err) {
-    console.error("Background summary generation failed:", err);
+function getSpeechResult(req: NextRequest, formData: FormData | null): string {
+  if (formData) {
+    const speech = formData.get("SpeechResult") as string;
+    if (speech) return speech;
   }
+  return decodeURIComponent(req.nextUrl.searchParams.get("speechResult") || "");
 }
 
 export async function POST(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get("sessionId") || "";
   const answerIndex = parseInt(req.nextUrl.searchParams.get("answerIndex") || "0");
+  const phase = req.nextUrl.searchParams.get("phase") || "";
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
 
-  // Get speech result from either form data (Gather callback) or query param (redirect fallback)
-  let elderAnswer = "";
+  let formData: FormData | null = null;
   try {
-    const formData = await req.formData();
-    elderAnswer = (formData.get("SpeechResult") as string) || "";
+    formData = await req.formData();
   } catch {
-    elderAnswer = decodeURIComponent(req.nextUrl.searchParams.get("speechResult") || "");
+    // No form data (redirect fallback)
   }
+  const elderAnswer = getSpeechResult(req, formData);
 
   try {
     const session = await prisma.assessmentSession.findUnique({
@@ -86,78 +107,87 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (!session || !session.answers[answerIndex]) {
+    if (!session) {
       return new NextResponse("<Response><Say>Goodbye.</Say></Response>", {
         headers: { "Content-Type": "text/xml" },
       });
     }
 
-    const currentAnswer = session.answers[answerIndex];
     const profile = session.elderlyProfile;
-    const voiceId = profile.voiceId || undefined;
     const audioDir = path.join(process.cwd(), "public", "audio");
+    const totalQuestions = session.answers.length;
 
-    const nextIndex = answerIndex + 1;
-    const isLastQuestion = nextIndex >= session.answers.length;
+    // ============================================================
+    // PHASE: EMOTIONAL — user just answered the emotional question
+    // ============================================================
+    if (phase === "emotional") {
+      // Save emotional response
+      prisma.assessmentSession.update({
+        where: { id: sessionId },
+        data: { emotionalResponse: elderAnswer || null },
+      }).catch((err: unknown) => console.error("Emotional save failed:", err));
 
-    // Evaluate answer — the only blocking API call now
-    let result: "CORRECT" | "WRONG" | "UNCLEAR" = "UNCLEAR";
-    let responseText = "I didn't quite catch that, but that's okay. Let's continue.";
+      // Read evaluation results from DB (should be done by now)
+      const answers = await prisma.assessmentAnswer.findMany({
+        where: { sessionId },
+        orderBy: { orderIndex: "asc" },
+      });
 
-    if (elderAnswer && elderAnswer.trim()) {
-      try {
-        const evaluation = await evaluateAssessmentAnswer({
-          questionText: currentAnswer.questionText,
-          correctAnswer: currentAnswer.correctAnswer,
-          elderAnswer,
-          language: profile.language,
-        });
-        result = evaluation.result;
-        responseText = evaluation.response;
-      } catch (err) {
-        console.error("Evaluation failed:", err);
+      const totalCorrect = answers.filter((a: { result: string | null }) => a.result === "CORRECT").length;
+      const score = answers.length > 0 ? totalCorrect / answers.length : 0;
+
+      // Build spoken summary
+      const isArabic = profile.language === "ar";
+      let summaryParts: string[] = [];
+
+      if (isArabic) {
+        summaryParts.push(`حصلت على ${totalCorrect} من ${answers.length} إجابات صحيحة.`);
+      } else {
+        summaryParts.push(`You got ${totalCorrect} out of ${answers.length} correct.`);
       }
-    }
 
-    // DB update — fire and forget, don't wait
-    prisma.assessmentAnswer.update({
-      where: { id: currentAnswer.id },
-      data: { elderAnswer: elderAnswer || null, result },
-    }).catch((err: unknown) => console.error("DB update failed:", err));
+      for (const a of answers) {
+        if (a.result === "CORRECT") {
+          if (isArabic) {
+            summaryParts.push(`سؤال: ${a.questionText}. إجابتك صحيحة!`);
+          } else {
+            summaryParts.push(`For the question: ${a.questionText}. You answered correctly!`);
+          }
+        } else if (a.result === "WRONG") {
+          if (isArabic) {
+            summaryParts.push(`سؤال: ${a.questionText}. الإجابة الصحيحة هي ${a.correctAnswer}.`);
+          } else {
+            summaryParts.push(`For the question: ${a.questionText}. The correct answer is ${a.correctAnswer}.`);
+          }
+        } else {
+          if (isArabic) {
+            summaryParts.push(`سؤال: ${a.questionText}. لم أتمكن من سماع إجابتك. الإجابة هي ${a.correctAnswer}.`);
+          } else {
+            summaryParts.push(`For the question: ${a.questionText}. I couldn't catch your answer. The answer is ${a.correctAnswer}.`);
+          }
+        }
+      }
 
-    if (isLastQuestion) {
-      // Complete session in background
-      const completionPromise = (async () => {
-        const allAnswers = await prisma.assessmentAnswer.findMany({
-          where: { sessionId },
-          orderBy: { orderIndex: "asc" },
-        });
-        const totalCorrect = allAnswers.filter((a: { result: string | null }) => a.result === "CORRECT").length;
-        const score = allAnswers.length > 0 ? totalCorrect / allAnswers.length : 0;
+      const closingText = isArabic
+        ? "شكراً لوقتك اليوم. اعتني بنفسك!"
+        : "Thank you for your time today. Take care!";
+      summaryParts.push(closingText);
 
-        await prisma.assessmentSession.update({
-          where: { id: sessionId },
-          data: {
-            status: "COMPLETED",
-            overallScore: score,
-            severity: score >= 0.75 ? "GREEN" : score >= 0.5 ? "YELLOW" : "RED",
-          },
-        });
+      // Complete session
+      prisma.assessmentSession.update({
+        where: { id: sessionId },
+        data: {
+          status: "COMPLETED",
+          overallScore: score,
+          severity: score >= 0.75 ? "GREEN" : score >= 0.5 ? "YELLOW" : "RED",
+        },
+      }).catch((err: unknown) => console.error("Session completion failed:", err));
 
-        // Summary in background too
-        generateSummaryInBackground(sessionId, profile.name, profile.language);
-      })();
-      completionPromise.catch(err => console.error("Session completion failed:", err));
-
-      // Use <Say> for closing — instant, no TTS API call
-      const closingText = profile.language === "ar"
-        ? "شكراً لإجاباتك اليوم. اعتني بنفسك!"
-        : "Thank you for answering my questions today. Take care!";
+      // Generate detailed summary in background
+      generateSummaryInBackground(sessionId, profile.name, profile.language);
 
       const twiml = `<Response>
-        <Say>${responseText}</Say>
-        <Pause length="1"/>
-        <Say>${closingText}</Say>
+        ${summaryParts.map(s => `<Say>${s}</Say>`).join("\n        <Pause length=\"1\"/>\n        ")}
       </Response>`;
 
       return new NextResponse(twiml, {
@@ -165,23 +195,70 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Check if next question audio is already pre-generated
+    // ============================================================
+    // PHASE: COGNITIVE QUESTIONS — save answer, evaluate in bg, next question
+    // ============================================================
+    const currentAnswer = session.answers[answerIndex];
+    if (!currentAnswer) {
+      return new NextResponse("<Response><Say>Goodbye.</Say></Response>", {
+        headers: { "Content-Type": "text/xml" },
+      });
+    }
+
+    // Save answer to DB (fire-and-forget)
+    prisma.assessmentAnswer.update({
+      where: { id: currentAnswer.id },
+      data: { elderAnswer: elderAnswer || null },
+    }).catch((err: unknown) => console.error("Answer save failed:", err));
+
+    // Start background Gemini evaluation (fire-and-forget)
+    if (elderAnswer && elderAnswer.trim()) {
+      evaluateInBackground(
+        currentAnswer.id,
+        currentAnswer.questionText,
+        currentAnswer.correctAnswer,
+        elderAnswer,
+        profile.language
+      );
+    } else {
+      // No answer — mark as UNCLEAR
+      prisma.assessmentAnswer.update({
+        where: { id: currentAnswer.id },
+        data: { result: "UNCLEAR" },
+      }).catch((err: unknown) => console.error("UNCLEAR update failed:", err));
+    }
+
+    const nextIndex = answerIndex + 1;
+    const isLastCognitive = nextIndex >= totalQuestions;
+
+    if (isLastCognitive) {
+      // All cognitive questions done — ask the emotional question
+      const isArabic = profile.language === "ar";
+      const emotionalQ = isArabic
+        ? "شكراً على إجاباتك. الآن، كيف تشعر اليوم؟ هل هناك شيء يزعجك أو يقلقك؟"
+        : "Thanks for answering those questions. Now, how are you feeling today? Is there anything bothering you or on your mind?";
+
+      const twiml = `<Response>
+        <Pause length="1"/>
+        <Say>${emotionalQ}</Say>
+        ${buildGatherTwiml(baseUrl!, sessionId, answerIndex, profile.language, "emotional")}
+      </Response>`;
+
+      return new NextResponse(twiml, {
+        headers: { "Content-Type": "text/xml" },
+      });
+    }
+
+    // More cognitive questions — play next one immediately (no validation delay)
     const nextAnswer = session.answers[nextIndex];
     const pregenFileName = `assessment-q-${nextAnswer.id}.mp3`;
     const pregenPath = path.join(audioDir, pregenFileName);
-    let nextQPregenerated = false;
-    try {
-      await access(pregenPath);
-      nextQPregenerated = true;
-    } catch {
-      nextQPregenerated = false;
-    }
-
     let nextQAudioTag: string;
 
-    if (nextQPregenerated) {
+    try {
+      await access(pregenPath);
       nextQAudioTag = `<Play>${baseUrl}/api/audio/${pregenFileName}</Play>`;
-    } else {
+    } catch {
       // Fallback: generate on-the-fly
       let nextQText = `Question ${nextIndex + 1}: ${nextAnswer.questionText}`;
       try {
@@ -189,15 +266,15 @@ export async function POST(req: NextRequest) {
           elderlyName: profile.name,
           questionText: nextAnswer.questionText,
           questionNumber: nextIndex + 1,
-          totalQuestions: session.answers.length,
+          totalQuestions: totalQuestions,
           language: profile.language,
         });
       } catch (err) {
         console.error("Question audio generation failed:", err);
       }
-
       try {
         await mkdir(audioDir, { recursive: true });
+        const voiceId = profile.voiceId || undefined;
         const buffer = await textToSpeech(nextQText, voiceId);
         await writeFile(path.join(audioDir, pregenFileName), buffer);
         nextQAudioTag = `<Play>${baseUrl}/api/audio/${pregenFileName}</Play>`;
@@ -206,10 +283,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Use <Say> for response — instant, no TTS needed for short phrases
     const twiml = `<Response>
-      <Say>${responseText}</Say>
-      <Pause length="1"/>
       ${nextQAudioTag}
       ${buildGatherTwiml(baseUrl!, sessionId, nextIndex, profile.language)}
     </Response>`;
@@ -228,13 +302,10 @@ export async function POST(req: NextRequest) {
 
       if (session) {
         const nextIndex = answerIndex + 1;
-        const isLast = nextIndex >= session.answers.length;
-
-        if (isLast) {
+        if (nextIndex >= session.answers.length) {
           const allAnswers = session.answers;
           const totalCorrect = allAnswers.filter((a: { result: string | null }) => a.result === "CORRECT").length;
           const score = allAnswers.length > 0 ? totalCorrect / allAnswers.length : 0;
-
           await prisma.assessmentSession.update({
             where: { id: sessionId },
             data: {
@@ -243,7 +314,6 @@ export async function POST(req: NextRequest) {
               severity: score >= 0.75 ? "GREEN" : score >= 0.5 ? "YELLOW" : "RED",
             },
           });
-
           return new NextResponse(
             `<Response><Say>Thank you for your time today. Goodbye!</Say></Response>`,
             { headers: { "Content-Type": "text/xml" } }
@@ -251,15 +321,13 @@ export async function POST(req: NextRequest) {
         }
 
         const twiml = `<Response>
-          <Say>Let's move on to the next question.</Say>
+          <Say>Let's move on.</Say>
           <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${nextIndex}&amp;speechResult=</Redirect>
         </Response>`;
-        return new NextResponse(twiml, {
-          headers: { "Content-Type": "text/xml" },
-        });
+        return new NextResponse(twiml, { headers: { "Content-Type": "text/xml" } });
       }
     } catch (innerErr) {
-      console.error("Error in assessment error handler:", innerErr);
+      console.error("Error in error handler:", innerErr);
     }
 
     return new NextResponse(
