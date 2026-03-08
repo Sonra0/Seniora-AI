@@ -5,6 +5,8 @@ import {
   generateAssessmentQuestionAudio,
   generateAssessmentSummary,
   analyzeVocalBiomarkers,
+  evaluateEmotionalResponse,
+  generateAnswerReview,
 } from "@/lib/gemini";
 import { textToSpeech } from "@/lib/elevenlabs";
 import { sendTelegramNotification } from "@/lib/telegram-api";
@@ -260,10 +262,183 @@ export async function POST(req: NextRequest) {
         data: { emotionalResponse: emotionalAnswer || null },
       }).catch((err: unknown) => console.error("Emotional save failed:", err));
 
-      // Wait a moment for background evaluations to finish
+      const isArabic = profile.language === "ar";
+      const lang = isArabic ? "ar-SA" : "en-US";
+      const voiceId = profile.voiceId || undefined;
+      await mkdir(audioDir, { recursive: true });
+
+      // Evaluate emotional response with Gemini
+      let sentiment: "POSITIVE" | "NEGATIVE" = "POSITIVE";
+      let emotionalResponseText = isArabic
+        ? "هذا رائع! سعيد أنك بخير."
+        : "That's great to hear! I'm glad you're doing well.";
+
+      if (emotionalAnswer && emotionalAnswer !== "UNCLEAR") {
+        try {
+          const evaluation = await evaluateEmotionalResponse({
+            elderlyName: profile.name,
+            emotionalAnswer,
+            language: profile.language,
+          });
+          sentiment = evaluation.sentiment;
+          emotionalResponseText = evaluation.response;
+        } catch (err) {
+          console.error("Emotional evaluation failed:", err);
+        }
+      }
+
+      // Generate TTS for the emotional response
+      let responseAudioTag: string;
+      try {
+        const buf = await textToSpeech(emotionalResponseText, voiceId);
+        const fileName = `assessment-emotional-resp-${sessionId}.mp3`;
+        await writeFile(path.join(audioDir, fileName), buf);
+        responseAudioTag = `<Play>${baseUrl}/api/audio/${fileName}</Play>`;
+      } catch {
+        responseAudioTag = `<Say>${emotionalResponseText}</Say>`;
+      }
+
+      if (sentiment === "NEGATIVE") {
+        // Send Telegram alert to all caregivers
+        try {
+          await sendTelegramNotification(
+            profile.id,
+            `⚠️ *Emotional Alert: ${profile.name}*\n\n${profile.name} expressed feeling unwell during today's assessment call.\n\nWhat they said: "${emotionalAnswer}"\n\nPlease check in on them.`
+          );
+        } catch (err) {
+          console.error("Telegram emotional alert failed:", err);
+        }
+
+        // Play concerned response, then ask about emergency call
+        const emergencyAskFile = `assessment-emergency-ask-${sessionId}.mp3`;
+        let emergencyAskTag: string;
+        try {
+          await access(path.join(audioDir, emergencyAskFile));
+          emergencyAskTag = `<Play>${baseUrl}/api/audio/${emergencyAskFile}</Play>`;
+        } catch {
+          const askText = isArabic
+            ? "هل تريد أن أتصل بشخص من عائلتك أو طبيبك الآن؟"
+            : "Would you like me to call someone from your family or your doctor right now?";
+          emergencyAskTag = `<Say>${askText}</Say>`;
+        }
+
+        const twiml = `<Response>
+          ${responseAudioTag}
+          <Pause length="1"/>
+          ${emergencyAskTag}
+          <Gather input="speech" speechTimeout="3" language="${lang}" action="${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}&amp;phase=emergency-ask" method="POST">
+          </Gather>
+          <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}&amp;phase=emergency-ask</Redirect>
+        </Response>`;
+
+        return new NextResponse(twiml, {
+          headers: { "Content-Type": "text/xml" },
+        });
+      }
+
+      // POSITIVE — say something warm, go straight to review
+      const twiml = `<Response>
+        ${responseAudioTag}
+        <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}&amp;phase=review</Redirect>
+      </Response>`;
+
+      return new NextResponse(twiml, {
+        headers: { "Content-Type": "text/xml" },
+      });
+    }
+
+    // ============================================================
+    // PHASE: EMERGENCY-ASK — user answered yes/no to emergency call
+    // ============================================================
+    if (phase === "emergency-ask") {
+      const emergencyAnswer = (formData?.get("SpeechResult") as string) || "";
+      const isArabic = profile.language === "ar";
+      const voiceId = profile.voiceId || undefined;
+      await mkdir(audioDir, { recursive: true });
+
+      // Determine if they said yes or no
+      const normalizedAnswer = emergencyAnswer.toLowerCase().trim();
+      const yesPatterns = isArabic
+        ? ["نعم", "أيوا", "إيه", "اه", "أي", "طبعا", "بلى"]
+        : ["yes", "yeah", "yep", "please", "sure", "ok", "okay", "ya"];
+      const wantsEmergency = yesPatterns.some(p => normalizedAnswer.includes(p));
+
+      if (wantsEmergency && profile.emergencyPhone) {
+        // Trigger emergency call in background
+        const { callEmergencyContact } = await import("@/lib/voice-call");
+        callEmergencyContact(profile.id);
+
+        // Send Telegram notification about emergency call
+        try {
+          await sendTelegramNotification(
+            profile.id,
+            `🚨 *Emergency Call Triggered: ${profile.name}*\n\n${profile.name} requested an emergency call during their assessment. Calling emergency contact (${profile.emergencyContact || profile.emergencyPhone}) now.`
+          );
+        } catch (err) {
+          console.error("Telegram emergency notification failed:", err);
+        }
+
+        // Reassure the elder
+        const reassureText = isArabic
+          ? "لا تقلق، سأتصل بهم الآن. سيتواصلون معك قريباً. الآن دعنا نراجع إجاباتك معاً."
+          : "Don't worry, I'm calling them right now. They'll reach out to you soon. Now let's go over your answers together.";
+
+        let reassureTag: string;
+        try {
+          const buf = await textToSpeech(reassureText, voiceId);
+          const fileName = `assessment-reassure-${sessionId}.mp3`;
+          await writeFile(path.join(audioDir, fileName), buf);
+          reassureTag = `<Play>${baseUrl}/api/audio/${fileName}</Play>`;
+        } catch {
+          reassureTag = `<Say>${reassureText}</Say>`;
+        }
+
+        const twiml = `<Response>
+          ${reassureTag}
+          <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}&amp;phase=review</Redirect>
+        </Response>`;
+
+        return new NextResponse(twiml, {
+          headers: { "Content-Type": "text/xml" },
+        });
+      }
+
+      // They said no or no emergency contact — be supportive, move to review
+      const supportText = isArabic
+        ? "حسناً، إذا احتجت أي شيء لا تتردد. أنا هنا دائماً. الآن دعنا نراجع إجاباتك!"
+        : "Okay, that's alright. If you ever need anything, don't hesitate. I'm always here for you. Now let's go over your answers!";
+
+      let supportTag: string;
+      try {
+        const buf = await textToSpeech(supportText, voiceId);
+        const fileName = `assessment-support-${sessionId}.mp3`;
+        await writeFile(path.join(audioDir, fileName), buf);
+        supportTag = `<Play>${baseUrl}/api/audio/${fileName}</Play>`;
+      } catch {
+        supportTag = `<Say>${supportText}</Say>`;
+      }
+
+      const twiml = `<Response>
+        ${supportTag}
+        <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}&amp;phase=review</Redirect>
+      </Response>`;
+
+      return new NextResponse(twiml, {
+        headers: { "Content-Type": "text/xml" },
+      });
+    }
+
+    // ============================================================
+    // PHASE: REVIEW — go through answers warmly, then goodbye
+    // ============================================================
+    if (phase === "review") {
+      const voiceId = profile.voiceId || undefined;
+      await mkdir(audioDir, { recursive: true });
+
+      // Wait for background evaluations to finish (they started during questions)
       await sleep(2000);
 
-      // Read evaluation results from DB
+      // Fetch evaluated answers
       const answers = await prisma.assessmentAnswer.findMany({
         where: { sessionId },
         orderBy: { orderIndex: "asc" },
@@ -271,36 +446,6 @@ export async function POST(req: NextRequest) {
 
       const totalCorrect = answers.filter((a: { result: string | null }) => a.result === "CORRECT").length;
       const score = answers.length > 0 ? totalCorrect / answers.length : 0;
-
-      // Build spoken summary
-      const isArabic = profile.language === "ar";
-      const summaryParts: string[] = [];
-
-      if (isArabic) {
-        summaryParts.push(`حصلت على ${totalCorrect} من ${answers.length} إجابات صحيحة.`);
-      } else {
-        summaryParts.push(`You got ${totalCorrect} out of ${answers.length} correct.`);
-      }
-
-      for (const a of answers) {
-        if (a.result === "CORRECT") {
-          summaryParts.push(isArabic
-            ? `سؤال: ${a.questionText}. إجابتك صحيحة!`
-            : `For the question: ${a.questionText}. You answered correctly!`);
-        } else if (a.result === "WRONG") {
-          summaryParts.push(isArabic
-            ? `سؤال: ${a.questionText}. الإجابة الصحيحة هي ${a.correctAnswer}.`
-            : `For the question: ${a.questionText}. The correct answer is ${a.correctAnswer}.`);
-        } else {
-          summaryParts.push(isArabic
-            ? `سؤال: ${a.questionText}. لم أتمكن من سماع إجابتك. الإجابة هي ${a.correctAnswer}.`
-            : `For the question: ${a.questionText}. I couldn't catch your answer. The answer is ${a.correctAnswer}.`);
-        }
-      }
-
-      summaryParts.push(isArabic
-        ? "شكراً لوقتك اليوم. اعتني بنفسك!"
-        : "Thank you for your time today. Take care!");
 
       // Complete session
       prisma.assessmentSession.update({
@@ -312,24 +457,43 @@ export async function POST(req: NextRequest) {
         },
       }).catch((err: unknown) => console.error("Session completion failed:", err));
 
+      // Generate summary + vocal analysis + Telegram report in background
       generateSummaryInBackground(sessionId, profile.name, profile.language, profile.id, score);
 
-      // Generate TTS summary using same ElevenLabs voice
-      const voiceId = profile.voiceId || undefined;
-      const fullSummaryText = summaryParts.join(" ");
-      await mkdir(audioDir, { recursive: true });
-
-      let summaryTwiml: string;
+      // Generate warm answer review with Gemini
+      let reviewText: string;
       try {
-        const summaryBuffer = await textToSpeech(fullSummaryText, voiceId);
-        const summaryFileName = `assessment-summary-${sessionId}.mp3`;
-        await writeFile(path.join(audioDir, summaryFileName), summaryBuffer);
-        summaryTwiml = `<Play>${baseUrl}/api/audio/${summaryFileName}</Play>`;
-      } catch {
-        summaryTwiml = summaryParts.map(s => `<Say>${s}</Say>`).join("\n        <Pause length=\"1\"/>\n        ");
+        reviewText = await generateAnswerReview({
+          elderlyName: profile.name,
+          answers: answers.map((a: { questionText: string; correctAnswer: string; elderAnswer: string | null; result: string | null }) => ({
+            questionText: a.questionText,
+            correctAnswer: a.correctAnswer,
+            elderAnswer: a.elderAnswer,
+            result: a.result,
+          })),
+          language: profile.language,
+        });
+      } catch (err) {
+        console.error("Answer review generation failed:", err);
+        // Fallback to simple review
+        const isArabic = profile.language === "ar";
+        reviewText = isArabic
+          ? `حصلت على ${totalCorrect} من ${answers.length} إجابات صحيحة. أحسنت! شكراً لوقتك اليوم. اعتني بنفسك!`
+          : `You got ${totalCorrect} out of ${answers.length} correct. Great job! Thanks for your time today. Take care of yourself!`;
       }
 
-      return new NextResponse(`<Response>${summaryTwiml}</Response>`, {
+      // Generate TTS for the review
+      let reviewTag: string;
+      try {
+        const buf = await textToSpeech(reviewText, voiceId);
+        const fileName = `assessment-review-${sessionId}.mp3`;
+        await writeFile(path.join(audioDir, fileName), buf);
+        reviewTag = `<Play>${baseUrl}/api/audio/${fileName}</Play>`;
+      } catch {
+        reviewTag = `<Say>${reviewText}</Say>`;
+      }
+
+      return new NextResponse(`<Response>${reviewTag}</Response>`, {
         headers: { "Content-Type": "text/xml" },
       });
     }

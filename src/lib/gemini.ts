@@ -29,11 +29,11 @@ export async function generateAssessmentGreeting(context: {
 }): Promise<string> {
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-  const prompt = `You are a caring, warm assistant calling an elderly person named ${context.elderlyName}.
-Generate a short, friendly greeting for a daily cognitive check-in call in ${context.language === "ar" ? "Arabic" : "English"}.
+  const prompt = `You are a cheerful, energetic, warm assistant calling an elderly person named ${context.elderlyName}.
+Generate a short, upbeat greeting for a daily cognitive check-in call in ${context.language === "ar" ? "Arabic" : "English"}.
 Time of day: ${context.timeOfDay}.
-Mention you'd like to ask a few simple questions to chat and check in on them.
-Keep it under 3 sentences. Be warm and natural, not clinical.`;
+Be enthusiastic! Mention you'd like to have a quick chat and ask a few fun questions together.
+Keep it under 3 sentences. Sound like a friendly neighbor, not a nurse or doctor. Be warm, positive, and energetic!`;
 
   const result = await model.generateContent(prompt);
   return result.response.text();
@@ -48,11 +48,11 @@ export async function generateAssessmentQuestionAudio(context: {
 }): Promise<string> {
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-  const prompt = `You are having a warm phone conversation with ${context.elderlyName}.
+  const prompt = `You are having a fun, warm phone conversation with ${context.elderlyName}.
 Ask them this question naturally in ${context.language === "ar" ? "Arabic" : "English"}: "${context.questionText}"
 This is question ${context.questionNumber} of ${context.totalQuestions}.
-${context.questionNumber > 1 ? "Add a brief natural transition like 'Now...' or 'Next one...' or 'Okay...'" : ""}
-Keep it to 1-2 sentences max. Be conversational, not like a test.`;
+${context.questionNumber > 1 ? "Add a brief encouraging transition like 'You're doing great! Next one...' or 'Awesome, here's another one...'" : "Start with something warm like 'Alright, here's the first one!' or 'Let's start with an easy one!'"}
+Keep it to 1-2 sentences max. Be energetic, positive, and conversational — like a fun game, not a test!`;
 
   const result = await model.generateContent(prompt);
   return result.response.text();
