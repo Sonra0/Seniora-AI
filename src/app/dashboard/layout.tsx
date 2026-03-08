@@ -1,14 +1,10 @@
-import Navbar from "@/components/Navbar";
+import { Sidebar } from "@/components/layout/Sidebar";
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
+    <div className="min-h-screen bg-[var(--bg-secondary)]">
+      <Sidebar />
+      <main className="md:ml-60 pb-20 md:pb-0">{children}</main>
     </div>
   );
 }
