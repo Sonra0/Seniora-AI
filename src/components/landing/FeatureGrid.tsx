@@ -79,7 +79,7 @@ const techPartners = [
   {
     name: "ElevenLabs",
     role: "Human-like Voice Synthesis",
-    brandColor: "#000000",
+    brandColor: "#E63946",
     logo: (
       <svg viewBox="0 0 24 24" className="h-8 w-8" fill="currentColor">
         <rect x="7" y="2" width="3" height="20" rx="1.5"/>
@@ -121,13 +121,13 @@ export default function FeatureGrid() {
             className="mx-auto max-w-xl text-center text-sm mb-12"
             style={{ color: "var(--text-secondary)" }}
           >
-            Powered by the <span className="font-semibold" style={{ color: "#4285F4" }}>Google</span> ecosystem and <span className="font-semibold" style={{ color: "#000000" }}>ElevenLabs</span> — the same technology behind the world&apos;s most advanced AI products.
+            Powered by the <span className="font-semibold" style={{ color: "#4285F4" }}>Google</span> ecosystem and <span className="font-semibold" style={{ color: "#E63946" }}>ElevenLabs</span> — the same technology behind the world&apos;s most advanced AI products.
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {techPartners.map((partner, i) => (
               <FadeIn key={partner.name} delay={i * 0.08}>
                 <div
-                  className="group flex flex-col items-center gap-3 rounded-2xl border-2 p-5 text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+                  className="group flex flex-col items-center justify-center gap-3 rounded-2xl border-2 p-5 text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-lg h-full"
                   style={{
                     borderColor: partner.brandColor + "30",
                     backgroundColor: "var(--card-bg)",
