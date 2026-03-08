@@ -97,6 +97,16 @@ const techPartners = [
       </svg>
     ),
   },
+  {
+    name: "Nano Banana",
+    role: "AI Prototyping Platform",
+    brandColor: "#FFD700",
+    logo: (
+      <svg viewBox="0 0 24 24" className="h-8 w-8" fill="currentColor">
+        <path d="M12 2C9.5 2 7.5 4.5 6.5 8c-1 3.5-.5 7.5 1 10.5 1 2 2.5 3.5 4.5 3.5s3.5-1.5 4.5-3.5c1.5-3 2-7 1-10.5C16.5 4.5 14.5 2 12 2zm0 2c1.5 0 3 2 3.8 5-.8-.5-2.2-.8-3.8-.8s-3 .3-3.8.8C9 6 10.5 4 12 4z"/>
+      </svg>
+    ),
+  },
 ];
 
 export default function FeatureGrid() {
@@ -123,7 +133,7 @@ export default function FeatureGrid() {
           >
             Powered by the <span className="font-semibold" style={{ color: "#4285F4" }}>Google</span> ecosystem and <span className="font-semibold" style={{ color: "#E63946" }}>ElevenLabs</span> — the same technology behind the world&apos;s most advanced AI products.
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             {techPartners.map((partner, i) => (
               <FadeIn key={partner.name} delay={i * 0.08}>
                 <div

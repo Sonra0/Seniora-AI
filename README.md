@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/Nano%20Banana-AI%20Prototyping-FFD700?style=for-the-badge&logoColor=black" />
   <img src="https://img.shields.io/badge/Google-Gemini%20API-4285F4?style=for-the-badge&logo=google&logoColor=white" />
   <img src="https://img.shields.io/badge/Google-Antigravity-34A853?style=for-the-badge&logo=google&logoColor=white" />
   <img src="https://img.shields.io/badge/Google-Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black" />
@@ -91,7 +92,7 @@ This project is **deeply integrated with the Google ecosystem and ElevenLabs** v
 | **Telephony** | Twilio (outbound calls, speech recognition, call recording) |
 | **Notifications** | Telegram Bot API (caregiver alerts + assessment reports) |
 | **Deployment** | Vultr VPS, PM2 process manager, auto-deploy via GitHub |
-| **Dev Tools** | Google Antigravity, Gemini CLI, Claude Code |
+| **Dev Tools** | Google Antigravity, Gemini CLI, Claude Code, Nano Banana |
 
 ---
 
@@ -181,7 +182,7 @@ Cron triggers call → Twilio dials elder
 
 **Infrastructure:** Vultr Cloud VPS, PM2, GitHub (auto-deploy)
 
-**Dev Tools:** Google Antigravity, Gemini CLI, Claude Code
+**Dev Tools:** Google Antigravity, Gemini CLI, Claude Code, Nano Banana
 
 ---
 
