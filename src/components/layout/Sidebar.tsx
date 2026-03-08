@@ -8,8 +8,6 @@ import { auth } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/Badge";
 
-// TODO: fetch real subscription plan from API
-const plan = "premium";
 
 const navItems = [
   {
@@ -36,7 +34,7 @@ const navItems = [
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, plan } = useAuth();
 
   const displayName = user?.displayName || user?.email?.split("@")[0] || "User";
   const initial = displayName.charAt(0).toUpperCase();
