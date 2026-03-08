@@ -283,9 +283,13 @@ async function processAssessments() {
     include: { elderlyProfile: true },
   });
 
+  console.log(`[Assessments] Found ${configs.length} active assessment config(s)`);
+
   for (const config of configs) {
     const tz = config.elderlyProfile.timezone || "UTC";
     const currentTime = getTimeInTimezone(tz);
+
+    console.log(`[Assessments] ${config.elderlyProfile.name}: scheduled=${config.scheduledTime}, current=${currentTime} (tz=${tz})`);
 
     if (config.scheduledTime !== currentTime) continue;
 
@@ -295,9 +299,13 @@ async function processAssessments() {
       where: { configId: config.id, date: todayStr },
     });
     // Only skip if a session exists and is COMPLETED or actively IN_PROGRESS
-    if (existingSession && (existingSession.status === "COMPLETED" || existingSession.status === "IN_PROGRESS")) continue;
+    if (existingSession && (existingSession.status === "COMPLETED" || existingSession.status === "IN_PROGRESS")) {
+      console.log(`[Assessments] Skipping ${config.elderlyProfile.name}: existing session with status ${existingSession.status}`);
+      continue;
+    }
     // Clean up any failed/pending session before creating a new one
     if (existingSession) {
+      console.log(`[Assessments] Cleaning up ${existingSession.status} session for ${config.elderlyProfile.name}`);
       await prisma.assessmentAnswer.deleteMany({ where: { sessionId: existingSession.id } });
       await prisma.assessmentSession.delete({ where: { id: existingSession.id } });
     }
@@ -309,7 +317,10 @@ async function processAssessments() {
       },
     });
 
-    if (allQuestions.length < 10) continue;
+    if (allQuestions.length < 10) {
+      console.log(`[Assessments] Skipping ${config.elderlyProfile.name}: only ${allQuestions.length} questions with answers (need 10)`);
+      continue;
+    }
 
     const shuffled = allQuestions.sort(() => Math.random() - 0.5);
     const selected = shuffled.slice(0, config.questionsPerCall);
@@ -338,14 +349,21 @@ async function processAssessments() {
 
 cron.schedule("* * * * *", async () => {
   console.log(`[${new Date().toISOString()}] Checking reminders...`);
-  try {
-    await deactivatePastReminders();
-    await processReminders();
-    await processRetries();
-    await processEmergencyCalls();
-    await processAssessments();
-  } catch (error) {
-    console.error("Error processing reminders:", error);
+
+  try { await deactivatePastReminders(); } catch (error) {
+    console.error("Error in deactivatePastReminders:", error);
+  }
+  try { await processReminders(); } catch (error) {
+    console.error("Error in processReminders:", error);
+  }
+  try { await processRetries(); } catch (error) {
+    console.error("Error in processRetries:", error);
+  }
+  try { await processEmergencyCalls(); } catch (error) {
+    console.error("Error in processEmergencyCalls:", error);
+  }
+  try { await processAssessments(); } catch (error) {
+    console.error("Error in processAssessments:", error);
   }
 });
 
