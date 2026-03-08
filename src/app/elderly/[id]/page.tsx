@@ -15,6 +15,7 @@ interface Caregiver {
   name: string;
   phone: string;
   phoneVerified: boolean;
+  telegramChatId?: string | null;
 }
 
 interface Medication {
@@ -65,6 +66,12 @@ export default function ElderlyDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [savingVoice, setSavingVoice] = useState(false);
+  const [telegramLink, setTelegramLink] = useState<{
+    linkCode: string;
+    botUsername: string;
+    caregiverId: string;
+  } | null>(null);
+  const [generatingLink, setGeneratingLink] = useState<string | null>(null);
 
   const refreshCaregivers = useCallback(() => {
     setCaregiverRefreshKey((k) => k + 1);
@@ -160,6 +167,24 @@ export default function ElderlyDetailPage() {
       setError(err instanceof Error ? err.message : "Failed to update voice");
     } finally {
       setSavingVoice(false);
+    }
+  }
+
+  async function handleGenerateTelegramLink(caregiverId: string) {
+    setGeneratingLink(caregiverId);
+    try {
+      const res = await apiFetch(`/api/elderly/${id}/telegram-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caregiverId }),
+      });
+      if (!res.ok) throw new Error("Failed to generate link");
+      const data = await res.json();
+      setTelegramLink({ ...data, caregiverId });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate link");
+    } finally {
+      setGeneratingLink(null);
     }
   }
 
@@ -348,6 +373,49 @@ export default function ElderlyDetailPage() {
               onSuccess={refreshCaregivers}
             />
           </div>
+          {profile.caregivers.length > 0 && (
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">
+                Link Telegram Bot
+              </h3>
+              <div className="space-y-2">
+                {profile.caregivers.map((cg) => (
+                  <div key={cg.id} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-700">
+                      {cg.name}
+                      {cg.telegramChatId && (
+                        <span className="ml-2 inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                          Telegram linked
+                        </span>
+                      )}
+                    </span>
+                    {!cg.telegramChatId && (
+                      <button
+                        onClick={() => handleGenerateTelegramLink(cg.id)}
+                        disabled={generatingLink === cg.id}
+                        className="rounded-lg border border-blue-300 px-3 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                      >
+                        {generatingLink === cg.id ? "Generating..." : "Generate Link Code"}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {telegramLink && (
+                <div className="mt-3 rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm">
+                  <p className="font-medium text-blue-800 mb-1">
+                    Send this to the Telegram bot:
+                  </p>
+                  <code className="block bg-white rounded px-2 py-1 text-blue-900 font-mono text-xs">
+                    /start {telegramLink.linkCode}
+                  </code>
+                  <p className="mt-1 text-xs text-blue-600">
+                    Bot: @{telegramLink.botUsername} &middot; Expires in 15 minutes
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Medications */}
