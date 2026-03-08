@@ -444,6 +444,24 @@ export default function ElderlyDetailPage() {
             </ul>
           )}
         </section>
+
+        {/* Cognitive Assessment */}
+        <section className={`rounded-xl border border-gray-200 bg-white p-6 shadow-sm ${!allVerified ? "opacity-50 pointer-events-none" : ""}`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Cognitive Assessment</h2>
+              <p className="text-sm text-gray-500 mt-1">Daily automated check-in calls with cognitive questions</p>
+            </div>
+            <Link
+              href={`/elderly/${id}/assessment`}
+              className={`rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition-colors ${allVerified ? "hover:bg-emerald-700" : "pointer-events-none opacity-50"}`}
+              aria-disabled={!allVerified}
+              tabIndex={!allVerified ? -1 : undefined}
+            >
+              Manage Assessment
+            </Link>
+          </div>
+        </section>
     </div>
   );
 }

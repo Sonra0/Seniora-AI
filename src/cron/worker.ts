@@ -2,6 +2,7 @@ import "dotenv/config";
 import cron from "node-cron";
 import { prisma } from "../lib/prisma";
 import { executeReminderCall, callEmergencyContact } from "../lib/voice-call";
+import { executeAssessmentCall } from "../lib/assessment-call";
 
 const MAX_ATTEMPTS = 3;
 const RETRY_INTERVAL_MINUTES = 5;
@@ -273,6 +274,58 @@ async function processEmergencyCalls() {
   }
 }
 
+async function processAssessments() {
+  const configs = await prisma.assessmentConfig.findMany({
+    where: {
+      active: true,
+      elderlyProfile: { phoneVerified: true },
+    },
+    include: { elderlyProfile: true },
+  });
+
+  for (const config of configs) {
+    const tz = config.elderlyProfile.timezone || "UTC";
+    const currentTime = getTimeInTimezone(tz);
+
+    if (config.scheduledTime !== currentTime) continue;
+
+    const todayStr = getTodayDateStringInTimezone(tz);
+
+    const existingSession = await prisma.assessmentSession.findFirst({
+      where: { configId: config.id, date: todayStr },
+    });
+    if (existingSession) continue;
+
+    const allQuestions = await prisma.assessmentQuestion.findMany({
+      where: { elderlyProfileId: config.elderlyProfileId },
+    });
+
+    if (allQuestions.length < 10) continue;
+
+    const shuffled = allQuestions.sort(() => Math.random() - 0.5);
+    const selected = shuffled.slice(0, config.questionsPerCall);
+
+    const session = await prisma.assessmentSession.create({
+      data: {
+        elderlyProfileId: config.elderlyProfileId,
+        configId: config.id,
+        date: todayStr,
+        status: "PENDING",
+        answers: {
+          create: selected.map((q) => ({
+            questionId: q.id,
+            questionText: q.questionText,
+            correctAnswer: q.correctAnswer,
+          })),
+        },
+      },
+    });
+
+    console.log(`Triggering assessment call for ${config.elderlyProfile.name}`);
+    await executeAssessmentCall(session.id);
+  }
+}
+
 cron.schedule("* * * * *", async () => {
   console.log(`[${new Date().toISOString()}] Checking reminders...`);
   try {
@@ -280,6 +333,7 @@ cron.schedule("* * * * *", async () => {
     await processReminders();
     await processRetries();
     await processEmergencyCalls();
+    await processAssessments();
   } catch (error) {
     console.error("Error processing reminders:", error);
   }
