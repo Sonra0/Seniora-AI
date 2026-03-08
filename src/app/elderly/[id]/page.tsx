@@ -5,6 +5,14 @@ import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/api";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
+import { ProfileHeader } from "@/components/profile/ProfileHeader";
+import { TabNav } from "@/components/profile/TabNav";
+import { StatCard } from "@/components/profile/StatCard";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { PageTransition } from "@/components/ui/PageTransition";
 import CaregiverList from "@/components/CaregiverList";
 import AddCaregiverForm from "@/components/AddCaregiverForm";
 import PhoneVerification from "@/components/PhoneVerification";
@@ -53,6 +61,14 @@ interface ElderlyProfile {
   role: "manager" | "caregiver";
 }
 
+const TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "medications", label: "Medications" },
+  { id: "reminders", label: "Reminders" },
+  { id: "assessment", label: "Assessment" },
+  { id: "calls", label: "Call Logs" },
+];
+
 export default function ElderlyDetailPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -62,6 +78,7 @@ export default function ElderlyDetailPage() {
   const [profile, setProfile] = useState<ElderlyProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState("overview");
   const [caregiverRefreshKey, setCaregiverRefreshKey] = useState(0);
   const [deleting, setDeleting] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -78,7 +95,12 @@ export default function ElderlyDetailPage() {
   }, []);
 
   async function handleDelete() {
-    if (!confirm(`Are you sure you want to delete ${profile?.name}'s profile? This will remove all their medications, reminders, and caregivers. This action cannot be undone.`)) return;
+    if (
+      !confirm(
+        `Are you sure you want to delete ${profile?.name}'s profile? This will remove all their medications, reminders, and caregivers. This action cannot be undone.`
+      )
+    )
+      return;
     setDeleting(true);
     try {
       const res = await apiFetch(`/api/elderly/${id}`, { method: "DELETE" });
@@ -114,45 +136,6 @@ export default function ElderlyDetailPage() {
     }
   }
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login");
-      return;
-    }
-    if (user && id) {
-      apiFetch(`/api/elderly/${id}`)
-        .then(async (res) => {
-          if (!res.ok) throw new Error("Failed to load profile");
-          return res.json();
-        })
-        .then(setProfile)
-        .catch((err) => setError(err.message))
-        .finally(() => setLoading(false));
-    }
-  }, [user, authLoading, router, id]);
-
-  if (authLoading || loading) {
-    return (
-      <div className="flex items-center justify-center py-32">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
-      </div>
-    );
-  }
-
-  if (error || !profile) {
-    return (
-      <div className="flex flex-col items-center justify-center py-32 gap-4">
-        <p className="text-red-600">{error || "Profile not found"}</p>
-        <Link
-          href="/dashboard"
-          className="text-sm text-indigo-600 hover:text-indigo-800"
-        >
-          Back to Dashboard
-        </Link>
-      </div>
-    );
-  }
-
   async function handleVoiceChange(voiceId: string) {
     setSavingVoice(true);
     try {
@@ -182,88 +165,181 @@ export default function ElderlyDetailPage() {
       const data = await res.json();
       setTelegramLink({ ...data, caregiverId });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate link");
+      setError(
+        err instanceof Error ? err.message : "Failed to generate link"
+      );
     } finally {
       setGeneratingLink(null);
     }
   }
 
-  const languageLabel = profile.language === "ar" ? "Arabic" : "English";
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login");
+      return;
+    }
+    if (user && id) {
+      apiFetch(`/api/elderly/${id}`)
+        .then(async (res) => {
+          if (!res.ok) throw new Error("Failed to load profile");
+          return res.json();
+        })
+        .then(setProfile)
+        .catch((err) => setError(err.message))
+        .finally(() => setLoading(false));
+    }
+  }, [user, authLoading, router, id]);
+
+  if (authLoading || loading) {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--accent)] border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (error || !profile) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 gap-4">
+        <p className="text-[var(--danger)]">{error || "Profile not found"}</p>
+        <Link
+          href="/dashboard"
+          className="text-sm text-[var(--accent)] hover:underline"
+        >
+          Back to Dashboard
+        </Link>
+      </div>
+    );
+  }
+
   const allVerified = profile.phoneVerified && profile.emergencyPhoneVerified;
 
   return (
-    <div className="space-y-8">
+    <PageTransition>
+      {/* Verification warning */}
       {!allVerified && (
-        <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-          <strong>Action required:</strong> Please verify both the elderly phone and emergency contact phone before managing medications, reminders, or caregivers.
+        <div className="mx-6 mt-4 rounded-xl bg-[var(--warning-light)] border border-amber-200 px-4 py-3 text-sm text-amber-800">
+          <strong>Action required:</strong> Please verify both the elderly phone
+          and emergency contact phone before managing medications, reminders, or
+          caregivers.
         </div>
       )}
-      <div className="flex items-center gap-4">
-        <Link
-          href="/dashboard"
-          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          &larr; Back
-        </Link>
-        <label className="relative cursor-pointer group shrink-0">
-          {profile.avatarUrl ? (
-            <img
-              src={profile.avatarUrl}
-              alt={profile.name}
-              className="h-12 w-12 rounded-full object-cover border-2 border-gray-200 group-hover:border-indigo-400 transition-colors"
-            />
-          ) : (
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 font-semibold text-lg border-2 border-transparent group-hover:border-indigo-400 transition-colors">
-              {profile.name.charAt(0).toUpperCase()}
-            </div>
-          )}
-          <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-            <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
-            </svg>
-          </div>
-          {uploadingAvatar && (
-            <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-            </div>
-          )}
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={handleAvatarUpload}
-            className="sr-only"
-          />
-        </label>
-        <h1 className="text-xl font-bold text-gray-900 flex-1">{profile.name}</h1>
-        {profile.role === "caregiver" && (
-          <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-            Caregiver
-          </span>
-        )}
-        {profile.role === "manager" && (
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+
+      {/* Header */}
+      <ProfileHeader
+        name={profile.name}
+        phone={profile.phone}
+        phoneVerified={profile.phoneVerified}
+        language={profile.language}
+        avatarUrl={profile.avatarUrl}
+        role={profile.role}
+        uploadingAvatar={uploadingAvatar}
+        deleting={deleting}
+        onAvatarUpload={handleAvatarUpload}
+        onDelete={handleDelete}
+      />
+
+      {/* Tabs */}
+      <TabNav tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
+
+      {/* Tab content with crossfade */}
+      <div className="px-6 py-6">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
           >
-            {deleting ? "Deleting..." : "Delete Profile"}
-          </button>
-        )}
+            {activeTab === "overview" && (
+              <OverviewTab profile={profile} allVerified={allVerified} />
+            )}
+            {activeTab === "medications" && (
+              <MedicationsTab
+                profile={profile}
+                allVerified={allVerified}
+                id={id}
+              />
+            )}
+            {activeTab === "reminders" && (
+              <RemindersTab
+                profile={profile}
+                allVerified={allVerified}
+                id={id}
+              />
+            )}
+            {activeTab === "assessment" && (
+              <AssessmentTab allVerified={allVerified} id={id} />
+            )}
+            {activeTab === "calls" && (
+              <CallLogsTab allVerified={allVerified} id={id} />
+            )}
+          </motion.div>
+        </AnimatePresence>
       </div>
-        {/* Profile Info */}
-        <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+    </PageTransition>
+  );
+
+  /* ─── Overview Tab ─── */
+  function OverviewTab({
+    profile,
+    allVerified,
+  }: {
+    profile: ElderlyProfile;
+    allVerified: boolean;
+  }) {
+    return (
+      <div className="space-y-6">
+        {/* Quick stats */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            label="Medications"
+            value={profile.medications.length}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m20.893 13.393-1.135-1.135a2.252 2.252 0 0 1-.421-.585l-1.08-2.16a.414.414 0 0 0-.663-.107.827.827 0 0 1-.812.21l-1.273-.363a.89.89 0 0 0-.738 1.595l.587.39c.59.395.674 1.23.172 1.732l-.2.2c-.212.212-.33.498-.33.796v.41c0 .409-.11.809-.32 1.158l-1.315 2.191a2.11 2.11 0 0 1-1.81 1.025 1.055 1.055 0 0 1-1.055-1.055v-1.172c0-.92-.56-1.747-1.414-2.089l-.655-.261a2.25 2.25 0 0 1-1.383-2.46l.007-.042a2.25 2.25 0 0 1 .29-.787l.09-.15a2.25 2.25 0 0 1 2.37-1.048l1.178.236c.016.003.032.007.048.012a.5.5 0 0 0 .472-.01l.89-.445a1.5 1.5 0 0 0 .572-.523L14.5 5.5" />
+              </svg>
+            }
+          />
+          <StatCard
+            label="Active Reminders"
+            value={profile.reminders.filter((r) => r.active).length}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+              </svg>
+            }
+          />
+          <StatCard
+            label="Caregivers"
+            value={profile.caregivers.length}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+              </svg>
+            }
+          />
+          <StatCard
+            label="Timezone"
+            value={profile.timezone?.split("/").pop()?.replace(/_/g, " ") || "UTC"}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              </svg>
+            }
+          />
+        </div>
+
+        {/* Profile info */}
+        <Card>
+          <h3 className="text-base font-semibold text-[var(--text-primary)] mb-4">
             Profile Information
-          </h2>
+          </h3>
           <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <dt className="text-sm font-medium text-gray-500">Name</dt>
-              <dd className="mt-1 text-sm text-gray-900">{profile.name}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-gray-500">Phone</dt>
-              <dd className="mt-1 flex items-center gap-2 text-sm text-gray-900">
+              <dt className="text-sm font-medium text-[var(--text-muted)]">Phone</dt>
+              <dd className="mt-1 flex items-center gap-2 text-sm text-[var(--text-primary)]">
                 {profile.phone}
                 <PhoneVerification
                   phone={profile.phone}
@@ -279,31 +355,27 @@ export default function ElderlyDetailPage() {
               </dd>
             </div>
             <div>
-              <dt className="text-sm font-medium text-gray-500">Language</dt>
-              <dd className="mt-1 text-sm text-gray-900">{languageLabel}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-gray-500">Timezone</dt>
-              <dd className="mt-1 text-sm text-gray-900">{profile.timezone?.replace(/_/g, " ") || "UTC"}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-gray-500">Created</dt>
-              <dd className="mt-1 text-sm text-gray-900">
+              <dt className="text-sm font-medium text-[var(--text-muted)]">Created</dt>
+              <dd className="mt-1 text-sm text-[var(--text-primary)]">
                 {new Date(profile.createdAt).toLocaleDateString()}
               </dd>
             </div>
             {profile.emergencyContact && (
               <div>
-                <dt className="text-sm font-medium text-gray-500">Emergency Contact</dt>
-                <dd className="mt-1 text-sm text-gray-900">
+                <dt className="text-sm font-medium text-[var(--text-muted)]">
+                  Emergency Contact
+                </dt>
+                <dd className="mt-1 text-sm text-[var(--text-primary)]">
                   {profile.emergencyContact}
                 </dd>
               </div>
             )}
             {profile.emergencyPhone && (
               <div>
-                <dt className="text-sm font-medium text-gray-500">Emergency Phone</dt>
-                <dd className="mt-1 flex items-center gap-2 text-sm text-gray-900">
+                <dt className="text-sm font-medium text-[var(--text-muted)]">
+                  Emergency Phone
+                </dt>
+                <dd className="mt-1 flex items-center gap-2 text-sm text-[var(--text-primary)]">
                   {profile.emergencyPhone}
                   <PhoneVerification
                     phone={profile.emergencyPhone}
@@ -312,7 +384,9 @@ export default function ElderlyDetailPage() {
                     entityId={profile.id}
                     onVerified={() =>
                       setProfile((prev) =>
-                        prev ? { ...prev, emergencyPhoneVerified: true } : prev
+                        prev
+                          ? { ...prev, emergencyPhoneVerified: true }
+                          : prev
                       )
                     }
                   />
@@ -320,16 +394,16 @@ export default function ElderlyDetailPage() {
               </div>
             )}
           </dl>
-        </section>
+        </Card>
 
-        {/* Voice Selection */}
-        <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        {/* Voice settings */}
+        <Card>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h3 className="text-base font-semibold text-[var(--text-primary)]">
               Call Voice
-            </h2>
+            </h3>
             {savingVoice && (
-              <span className="text-xs text-gray-500">Saving...</span>
+              <span className="text-xs text-[var(--text-muted)]">Saving...</span>
             )}
           </div>
           <VoiceSelector
@@ -345,191 +419,270 @@ export default function ElderlyDetailPage() {
                   body: JSON.stringify({ voiceId, customVoiceName: name }),
                 });
                 if (!res.ok) throw new Error("Failed to save cloned voice");
-                setProfile((prev) => prev ? { ...prev, voiceId, customVoiceName: name } : prev);
+                setProfile((prev) =>
+                  prev ? { ...prev, voiceId, customVoiceName: name } : prev
+                );
               } catch (err) {
-                setError(err instanceof Error ? err.message : "Failed to save");
+                setError(
+                  err instanceof Error ? err.message : "Failed to save"
+                );
               } finally {
                 setSavingVoice(false);
               }
             }}
           />
-        </section>
+        </Card>
 
         {/* Caregivers */}
-        <section className={`rounded-xl border border-gray-200 bg-white p-6 shadow-sm ${!allVerified ? "opacity-50 pointer-events-none" : ""}`}>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <Card className={!allVerified ? "opacity-50 pointer-events-none" : ""}>
+          <h3 className="text-base font-semibold text-[var(--text-primary)] mb-4">
             Caregivers
-          </h2>
+          </h3>
           <CaregiverList
             elderlyProfileId={profile.id}
             refreshKey={caregiverRefreshKey}
           />
-          <div className="mt-4 border-t border-gray-100 pt-4">
-            <h3 className="text-sm font-medium text-gray-700 mb-3">
+          <div className="mt-4 border-t border-[var(--border-default)] pt-4">
+            <h4 className="text-sm font-medium text-[var(--text-secondary)] mb-3">
               Add a caregiver
-            </h3>
+            </h4>
             <AddCaregiverForm
               elderlyProfileId={profile.id}
               onSuccess={refreshCaregivers}
             />
           </div>
           {profile.caregivers.length > 0 && (
-            <div className="mt-4 border-t border-gray-100 pt-4">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">
+            <div className="mt-4 border-t border-[var(--border-default)] pt-4">
+              <h4 className="text-sm font-medium text-[var(--text-secondary)] mb-3">
                 Link Telegram Bot
-              </h3>
+              </h4>
               <div className="space-y-2">
                 {profile.caregivers.map((cg) => (
-                  <div key={cg.id} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-700">
+                  <div
+                    key={cg.id}
+                    className="flex items-center justify-between text-sm"
+                  >
+                    <span className="text-[var(--text-primary)]">
                       {cg.name}
                       {cg.telegramChatId && (
-                        <span className="ml-2 inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                        <Badge variant="success" className="ml-2">
                           Telegram linked
-                        </span>
+                        </Badge>
                       )}
                     </span>
                     {!cg.telegramChatId && (
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        loading={generatingLink === cg.id}
                         onClick={() => handleGenerateTelegramLink(cg.id)}
-                        disabled={generatingLink === cg.id}
-                        className="rounded-lg border border-blue-300 px-3 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
                       >
-                        {generatingLink === cg.id ? "Generating..." : "Generate Link Code"}
-                      </button>
+                        Generate Link Code
+                      </Button>
                     )}
                   </div>
                 ))}
               </div>
               {telegramLink && (
-                <div className="mt-3 rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm">
-                  <p className="font-medium text-blue-800 mb-1">
+                <div className="mt-3 rounded-lg bg-[var(--accent-light)] border border-[var(--accent)] p-3 text-sm">
+                  <p className="font-medium text-[var(--text-primary)] mb-1">
                     Send this to the Telegram bot:
                   </p>
-                  <code className="block bg-white rounded px-2 py-1 text-blue-900 font-mono text-xs">
+                  <code className="block bg-[var(--bg-primary)] rounded px-2 py-1 text-[var(--accent)] font-mono text-xs">
                     /start {telegramLink.linkCode}
                   </code>
-                  <p className="mt-1 text-xs text-blue-600">
-                    Bot: @{telegramLink.botUsername} &middot; Expires in 15 minutes
+                  <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                    Bot: @{telegramLink.botUsername} &middot; Expires in 15
+                    minutes
                   </p>
                 </div>
               )}
             </div>
           )}
-        </section>
+        </Card>
+      </div>
+    );
+  }
 
-        {/* Medications */}
-        <section className={`rounded-xl border border-gray-200 bg-white p-6 shadow-sm ${!allVerified ? "opacity-50 pointer-events-none" : ""}`}>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Medications
-            </h2>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-500">
-                {profile.medications.length} total
-              </span>
-              <Link
-                href={`/elderly/${id}/reminders`}
-                className={`rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition-colors ${allVerified ? "hover:bg-indigo-700" : "pointer-events-none opacity-50"}`}
-                aria-disabled={!allVerified}
-                tabIndex={!allVerified ? -1 : undefined}
-              >
-                Manage Medications &amp; Reminders
-              </Link>
-            </div>
-          </div>
-          {profile.medications.length === 0 ? (
-            <p className="text-sm text-gray-500">No medications added yet.</p>
-          ) : (
-            <ul className="divide-y divide-gray-100">
+  /* ─── Medications Tab ─── */
+  function MedicationsTab({
+    profile,
+    allVerified,
+    id,
+  }: {
+    profile: ElderlyProfile;
+    allVerified: boolean;
+    id: string;
+  }) {
+    return (
+      <div
+        className={`space-y-4 ${!allVerified ? "opacity-50 pointer-events-none" : ""}`}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold text-[var(--text-primary)]">
+            Medications ({profile.medications.length})
+          </h3>
+          <Link href={`/elderly/${id}/reminders`}>
+            <Button size="sm">Manage Medications</Button>
+          </Link>
+        </div>
+        {profile.medications.length === 0 ? (
+          <Card>
+            <p className="text-sm text-[var(--text-secondary)] text-center py-8">
+              No medications added yet.
+            </p>
+          </Card>
+        ) : (
+          <Card padding="none">
+            <ul className="divide-y divide-[var(--border-default)]">
               {profile.medications.map((med) => (
-                <li key={med.id} className="py-3">
-                  <p className="text-sm font-medium text-gray-900">
-                    {med.name}
-                  </p>
-                  {med.dosage && (
-                    <p className="text-sm text-gray-500">
-                      Dosage: {med.dosage}
-                    </p>
-                  )}
-                  {med.instructions && (
-                    <p className="text-sm text-gray-500">
-                      {med.instructions}
-                    </p>
-                  )}
+                <li key={med.id} className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-light)] text-[var(--accent)] shrink-0">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m20.893 13.393-1.135-1.135a2.252 2.252 0 0 1-.421-.585l-1.08-2.16a.414.414 0 0 0-.663-.107.827.827 0 0 1-.812.21l-1.273-.363a.89.89 0 0 0-.738 1.595l.587.39c.59.395.674 1.23.172 1.732l-.2.2c-.212.212-.33.498-.33.796v.41c0 .409-.11.809-.32 1.158l-1.315 2.191a2.11 2.11 0 0 1-1.81 1.025 1.055 1.055 0 0 1-1.055-1.055v-1.172c0-.92-.56-1.747-1.414-2.089l-.655-.261a2.25 2.25 0 0 1-1.383-2.46l.007-.042a2.25 2.25 0 0 1 .29-.787l.09-.15a2.25 2.25 0 0 1 2.37-1.048l1.178.236c.016.003.032.007.048.012a.5.5 0 0 0 .472-.01l.89-.445a1.5 1.5 0 0 0 .572-.523L14.5 5.5" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[var(--text-primary)]">
+                        {med.name}
+                      </p>
+                      {med.dosage && (
+                        <p className="text-xs text-[var(--text-secondary)]">
+                          {med.dosage}
+                        </p>
+                      )}
+                      {med.instructions && (
+                        <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                          {med.instructions}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </li>
               ))}
             </ul>
-          )}
-        </section>
+          </Card>
+        )}
+      </div>
+    );
+  }
 
-        {/* Reminders */}
-        <section className={`rounded-xl border border-gray-200 bg-white p-6 shadow-sm ${!allVerified ? "opacity-50 pointer-events-none" : ""}`}>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Reminders</h2>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-500">
-                {profile.reminders.length} total
-              </span>
-              <Link
-                href={`/elderly/${id}/logs`}
-                className={`rounded-lg border border-indigo-600 px-3 py-1.5 text-sm font-medium text-indigo-600 transition-colors ${allVerified ? "hover:bg-indigo-50" : "pointer-events-none opacity-50"}`}
-                aria-disabled={!allVerified}
-                tabIndex={!allVerified ? -1 : undefined}
-              >
-                View Call History
-              </Link>
-            </div>
-          </div>
-          {profile.reminders.length === 0 ? (
-            <p className="text-sm text-gray-500">No reminders set up yet.</p>
-          ) : (
-            <ul className="divide-y divide-gray-100">
+  /* ─── Reminders Tab ─── */
+  function RemindersTab({
+    profile,
+    allVerified,
+    id,
+  }: {
+    profile: ElderlyProfile;
+    allVerified: boolean;
+    id: string;
+  }) {
+    return (
+      <div
+        className={`space-y-4 ${!allVerified ? "opacity-50 pointer-events-none" : ""}`}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold text-[var(--text-primary)]">
+            Reminders ({profile.reminders.length})
+          </h3>
+          <Link href={`/elderly/${id}/reminders`}>
+            <Button size="sm">Manage Reminders</Button>
+          </Link>
+        </div>
+        {profile.reminders.length === 0 ? (
+          <Card>
+            <p className="text-sm text-[var(--text-secondary)] text-center py-8">
+              No reminders set up yet.
+            </p>
+          </Card>
+        ) : (
+          <Card padding="none">
+            <ul className="divide-y divide-[var(--border-default)]">
               {profile.reminders.map((rem) => (
                 <li
                   key={rem.id}
-                  className="flex items-center justify-between py-3"
+                  className="flex items-center justify-between px-6 py-4"
                 >
                   <div>
-                    <p className="text-sm font-medium text-gray-900">
+                    <p className="text-sm font-medium text-[var(--text-primary)]">
                       {rem.title}
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-xs text-[var(--text-secondary)]">
                       {rem.type} &middot; {rem.scheduledTime}
                     </p>
                   </div>
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      rem.active
-                        ? "bg-green-100 text-green-700"
-                        : "bg-gray-100 text-gray-500"
-                    }`}
-                  >
+                  <Badge variant={rem.active ? "success" : "default"}>
                     {rem.active ? "Active" : "Inactive"}
-                  </span>
+                  </Badge>
                 </li>
               ))}
             </ul>
-          )}
-        </section>
+          </Card>
+        )}
+      </div>
+    );
+  }
 
-        {/* Cognitive Assessment */}
-        <section className={`rounded-xl border border-gray-200 bg-white p-6 shadow-sm ${!allVerified ? "opacity-50 pointer-events-none" : ""}`}>
+  /* ─── Assessment Tab ─── */
+  function AssessmentTab({
+    allVerified,
+    id,
+  }: {
+    allVerified: boolean;
+    id: string;
+  }) {
+    return (
+      <div
+        className={`${!allVerified ? "opacity-50 pointer-events-none" : ""}`}
+      >
+        <Card>
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Cognitive Assessment</h2>
-              <p className="text-sm text-gray-500 mt-1">Daily automated check-in calls with cognitive questions</p>
+              <h3 className="text-base font-semibold text-[var(--text-primary)]">
+                Cognitive Assessment
+              </h3>
+              <p className="text-sm text-[var(--text-secondary)] mt-1">
+                Daily automated check-in calls with cognitive questions
+              </p>
             </div>
-            <Link
-              href={`/elderly/${id}/assessment`}
-              className={`rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition-colors ${allVerified ? "hover:bg-emerald-700" : "pointer-events-none opacity-50"}`}
-              aria-disabled={!allVerified}
-              tabIndex={!allVerified ? -1 : undefined}
-            >
-              Manage Assessment
+            <Link href={`/elderly/${id}/assessment`}>
+              <Button>Manage Assessment</Button>
             </Link>
           </div>
-        </section>
-    </div>
-  );
+        </Card>
+      </div>
+    );
+  }
+
+  /* ─── Call Logs Tab ─── */
+  function CallLogsTab({
+    allVerified,
+    id,
+  }: {
+    allVerified: boolean;
+    id: string;
+  }) {
+    return (
+      <div
+        className={`${!allVerified ? "opacity-50 pointer-events-none" : ""}`}
+      >
+        <Card>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-[var(--text-primary)]">
+                Call History
+              </h3>
+              <p className="text-sm text-[var(--text-secondary)] mt-1">
+                View all past reminder and assessment calls
+              </p>
+            </div>
+            <Link href={`/elderly/${id}/logs`}>
+              <Button variant="secondary">View Full History</Button>
+            </Link>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 }
