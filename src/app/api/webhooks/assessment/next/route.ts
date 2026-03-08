@@ -378,10 +378,10 @@ export async function POST(req: NextRequest) {
           console.error("Telegram emergency notification failed:", err);
         }
 
-        // Reassure the elder
+        // Reassure the elder and end the call — don't go through answer review
         const reassureText = isArabic
-          ? "لا تقلق، سأتصل بهم الآن. سيتواصلون معك قريباً. الآن دعنا نراجع إجاباتك معاً."
-          : "Don't worry, I'm calling them right now. They'll reach out to you soon. Now let's go over your answers together.";
+          ? "لا تقلق، سأتصل بهم الآن. سيتواصلون معك قريباً. ابقَ بأمان، مع السلامة!"
+          : "Don't worry, I'm calling them right now. They'll reach out to you very soon. Stay safe, take care!";
 
         let reassureTag: string;
         try {
@@ -393,9 +393,28 @@ export async function POST(req: NextRequest) {
           reassureTag = `<Say>${reassureText}</Say>`;
         }
 
+        // Complete session in background (skip review, just finalize)
+        const answers = await prisma.assessmentAnswer.findMany({
+          where: { sessionId },
+          orderBy: { orderIndex: "asc" },
+        });
+        const totalCorrect = answers.filter((a: { result: string | null }) => a.result === "CORRECT").length;
+        const score = answers.length > 0 ? totalCorrect / answers.length : 0;
+
+        prisma.assessmentSession.update({
+          where: { id: sessionId },
+          data: {
+            status: "COMPLETED",
+            overallScore: score,
+            severity: score >= 0.75 ? "GREEN" : score >= 0.5 ? "YELLOW" : "RED",
+          },
+        }).catch((err: unknown) => console.error("Session completion failed:", err));
+
+        generateSummaryInBackground(sessionId, profile.name, profile.language, profile.id, score);
+
+        // Hang up after reassurance
         const twiml = `<Response>
           ${reassureTag}
-          <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}&amp;phase=review</Redirect>
         </Response>`;
 
         return new NextResponse(twiml, {
