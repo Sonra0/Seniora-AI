@@ -1,35 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { textToSpeech } from "@/lib/elevenlabs";
 import {
   evaluateAssessmentAnswer,
   generateAssessmentQuestionAudio,
   generateAssessmentClosing,
   generateAssessmentSummary,
 } from "@/lib/gemini";
+import { textToSpeech } from "@/lib/elevenlabs";
 import { writeFile, mkdir, access } from "fs/promises";
 import path from "path";
-
-async function generateAudioOrFallback(
-  text: string,
-  voiceId: string | undefined,
-  fileName: string,
-  audioDir: string,
-  baseUrl: string
-): Promise<{ url: string; usedTts: boolean }> {
-  try {
-    const buffer = await textToSpeech(text, voiceId);
-    await writeFile(path.join(audioDir, fileName), buffer);
-    return { url: `${baseUrl}/api/audio/${fileName}`, usedTts: true };
-  } catch (err) {
-    console.error("TTS failed, will use Twilio Say fallback:", err);
-    return { url: "", usedTts: false };
-  }
-}
-
-function playOrSay(url: string, usedTts: boolean, fallbackText: string): string {
-  return usedTts ? `<Play>${url}</Play>` : `<Say>${fallbackText}</Say>`;
-}
 
 function buildGatherTwiml(
   baseUrl: string,
@@ -38,7 +17,7 @@ function buildGatherTwiml(
   language: string
 ): string {
   const lang = language === "ar" ? "ar-SA" : "en-US";
-  return `<Gather input="speech" speechTimeout="3" language="${lang}" action="${baseUrl}/api/webhooks/assessment?sessionId=${sessionId}&amp;answerIndex=${answerIndex}" method="POST">
+  return `<Gather input="speech" speechTimeout="3" language="${lang}" action="${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}" method="POST">
       </Gather>
       <Say>I didn't hear anything. Let's move on.</Say>
       <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=${answerIndex}&amp;speechResult=</Redirect>`;
@@ -56,14 +35,14 @@ async function generateSummaryInBackground(
       orderBy: { orderIndex: "asc" },
     });
 
-    const totalCorrect = allAnswers.filter((a) => a.result === "CORRECT").length;
+    const totalCorrect = allAnswers.filter((a: { result: string | null }) => a.result === "CORRECT").length;
     const score = allAnswers.length > 0 ? totalCorrect / allAnswers.length : 0;
     const todayStr = new Date().toLocaleDateString("en-CA");
 
     const report = await generateAssessmentSummary({
       elderlyName,
       date: todayStr,
-      answers: allAnswers.map((a) => ({
+      answers: allAnswers.map((a: { questionText: string; correctAnswer: string; elderAnswer: string | null; result: string | null }) => ({
         questionText: a.questionText,
         correctAnswer: a.correctAnswer,
         elderAnswer: a.elderAnswer,
@@ -87,8 +66,16 @@ async function generateSummaryInBackground(
 export async function POST(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get("sessionId") || "";
   const answerIndex = parseInt(req.nextUrl.searchParams.get("answerIndex") || "0");
-  const elderAnswer = decodeURIComponent(req.nextUrl.searchParams.get("speechResult") || "");
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+  // Get speech result from either form data (Gather callback) or query param (redirect fallback)
+  let elderAnswer = "";
+  try {
+    const formData = await req.formData();
+    elderAnswer = (formData.get("SpeechResult") as string) || "";
+  } catch {
+    elderAnswer = decodeURIComponent(req.nextUrl.searchParams.get("speechResult") || "");
+  }
 
   try {
     const session = await prisma.assessmentSession.findUnique({
@@ -109,12 +96,11 @@ export async function POST(req: NextRequest) {
     const profile = session.elderlyProfile;
     const voiceId = profile.voiceId || undefined;
     const audioDir = path.join(process.cwd(), "public", "audio");
-    await mkdir(audioDir, { recursive: true });
 
     const nextIndex = answerIndex + 1;
     const isLastQuestion = nextIndex >= session.answers.length;
 
-    // Evaluate answer (only Gemini call needed now — no transcription!)
+    // Evaluate answer — the only blocking API call now
     let result: "CORRECT" | "WRONG" | "UNCLEAR" = "UNCLEAR";
     let responseText = "I didn't quite catch that, but that's okay. Let's continue.";
 
@@ -133,63 +119,45 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Run DB update and response TTS in parallel
-    const [, responseAudio] = await Promise.all([
-      prisma.assessmentAnswer.update({
-        where: { id: currentAnswer.id },
-        data: { elderAnswer: elderAnswer || null, result },
-      }),
-      generateAudioOrFallback(
-        responseText, voiceId,
-        `assessment-resp-${currentAnswer.id}.mp3`, audioDir, baseUrl!
-      ),
-    ]);
+    // DB update — fire and forget, don't wait
+    prisma.assessmentAnswer.update({
+      where: { id: currentAnswer.id },
+      data: { elderAnswer: elderAnswer || null, result },
+    }).catch((err: unknown) => console.error("DB update failed:", err));
 
     if (isLastQuestion) {
-      // Calculate score and complete session immediately
-      const allAnswers = await prisma.assessmentAnswer.findMany({
-        where: { sessionId },
-        orderBy: { orderIndex: "asc" },
-      });
-
-      const totalCorrect = allAnswers.filter((a) => a.result === "CORRECT").length;
-      const score = allAnswers.length > 0 ? totalCorrect / allAnswers.length : 0;
-
-      // Generate closing + update session in parallel
-      let closingText = "Thank you for answering my questions today. Take care!";
-      try {
-        closingText = await generateAssessmentClosing({
-          elderlyName: profile.name,
-          score: totalCorrect,
-          totalQuestions: allAnswers.length,
-          language: profile.language,
+      // Complete session in background
+      const completionPromise = (async () => {
+        const allAnswers = await prisma.assessmentAnswer.findMany({
+          where: { sessionId },
+          orderBy: { orderIndex: "asc" },
         });
-      } catch (err) {
-        console.error("Closing generation failed:", err);
-      }
+        const totalCorrect = allAnswers.filter((a: { result: string | null }) => a.result === "CORRECT").length;
+        const score = allAnswers.length > 0 ? totalCorrect / allAnswers.length : 0;
 
-      const [closingAudio] = await Promise.all([
-        generateAudioOrFallback(
-          closingText, voiceId,
-          `assessment-closing-${sessionId}.mp3`, audioDir, baseUrl!
-        ),
-        prisma.assessmentSession.update({
+        await prisma.assessmentSession.update({
           where: { id: sessionId },
           data: {
             status: "COMPLETED",
             overallScore: score,
             severity: score >= 0.75 ? "GREEN" : score >= 0.5 ? "YELLOW" : "RED",
           },
-        }),
-      ]);
+        });
 
-      // Generate detailed summary in background — don't block the call
-      generateSummaryInBackground(sessionId, profile.name, profile.language);
+        // Summary in background too
+        generateSummaryInBackground(sessionId, profile.name, profile.language);
+      })();
+      completionPromise.catch(err => console.error("Session completion failed:", err));
+
+      // Use <Say> for closing — instant, no TTS API call
+      const closingText = profile.language === "ar"
+        ? "شكراً لإجاباتك اليوم. اعتني بنفسك!"
+        : "Thank you for answering my questions today. Take care!";
 
       const twiml = `<Response>
-        ${playOrSay(responseAudio.url, responseAudio.usedTts, responseText)}
+        <Say>${responseText}</Say>
         <Pause length="1"/>
-        ${playOrSay(closingAudio.url, closingAudio.usedTts, closingText)}
+        <Say>${closingText}</Say>
       </Response>`;
 
       return new NextResponse(twiml, {
@@ -209,12 +177,13 @@ export async function POST(req: NextRequest) {
       nextQPregenerated = false;
     }
 
-    let nextQAudio: { url: string; usedTts: boolean };
-    let nextQText = `Question ${nextIndex + 1}: ${nextAnswer.questionText}`;
+    let nextQAudioTag: string;
 
     if (nextQPregenerated) {
-      nextQAudio = { url: `${baseUrl}/api/audio/${pregenFileName}`, usedTts: true };
+      nextQAudioTag = `<Play>${baseUrl}/api/audio/${pregenFileName}</Play>`;
     } else {
+      // Fallback: generate on-the-fly
+      let nextQText = `Question ${nextIndex + 1}: ${nextAnswer.questionText}`;
       try {
         nextQText = await generateAssessmentQuestionAudio({
           elderlyName: profile.name,
@@ -226,16 +195,22 @@ export async function POST(req: NextRequest) {
       } catch (err) {
         console.error("Question audio generation failed:", err);
       }
-      nextQAudio = await generateAudioOrFallback(
-        nextQText, voiceId,
-        `assessment-q-${nextAnswer.id}.mp3`, audioDir, baseUrl!
-      );
+
+      try {
+        await mkdir(audioDir, { recursive: true });
+        const buffer = await textToSpeech(nextQText, voiceId);
+        await writeFile(path.join(audioDir, pregenFileName), buffer);
+        nextQAudioTag = `<Play>${baseUrl}/api/audio/${pregenFileName}</Play>`;
+      } catch {
+        nextQAudioTag = `<Say>${nextQText}</Say>`;
+      }
     }
 
+    // Use <Say> for response — instant, no TTS needed for short phrases
     const twiml = `<Response>
-      ${playOrSay(responseAudio.url, responseAudio.usedTts, responseText)}
+      <Say>${responseText}</Say>
       <Pause length="1"/>
-      ${playOrSay(nextQAudio.url, nextQAudio.usedTts, nextQText)}
+      ${nextQAudioTag}
       ${buildGatherTwiml(baseUrl!, sessionId, nextIndex, profile.language)}
     </Response>`;
 
@@ -257,7 +232,7 @@ export async function POST(req: NextRequest) {
 
         if (isLast) {
           const allAnswers = session.answers;
-          const totalCorrect = allAnswers.filter((a) => a.result === "CORRECT").length;
+          const totalCorrect = allAnswers.filter((a: { result: string | null }) => a.result === "CORRECT").length;
           const score = allAnswers.length > 0 ? totalCorrect / allAnswers.length : 0;
 
           await prisma.assessmentSession.update({

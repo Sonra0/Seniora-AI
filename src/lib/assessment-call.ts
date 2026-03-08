@@ -43,7 +43,7 @@ export async function executeAssessmentCall(sessionId: string) {
     const greetingUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/audio/${greetingFileName}`;
 
     // Pre-generate ALL question audio in parallel (eliminates per-question latency during call)
-    const questionAudioPromises = session.answers.map(async (answer, idx) => {
+    const questionAudioPromises = session.answers.map(async (answer: { id: string; questionText: string }, idx: number) => {
       const qScript = await generateAssessmentQuestionAudio({
         elderlyName: profile.name,
         questionText: answer.questionText,
@@ -67,7 +67,7 @@ export async function executeAssessmentCall(sessionId: string) {
       <Play>${greetingUrl}</Play>
       <Pause length="1"/>
       <Play>${q1Url}</Play>
-      <Gather input="speech" speechTimeout="3" language="${lang}" action="${baseUrl}/api/webhooks/assessment?sessionId=${sessionId}&amp;answerIndex=0" method="POST">
+      <Gather input="speech" speechTimeout="3" language="${lang}" action="${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=0" method="POST">
       </Gather>
       <Say>I didn't hear anything. Let's move on.</Say>
       <Redirect method="POST">${baseUrl}/api/webhooks/assessment/next?sessionId=${sessionId}&amp;answerIndex=0&amp;speechResult=</Redirect>
