@@ -28,7 +28,7 @@ jobs:
             echo "=== Prisma Migrate ==="
             npx prisma migrate deploy
             echo "=== Cancel stuck assessment sessions ==="
-            npx prisma db execute --stdin <<< "UPDATE \"AssessmentSession\" SET status = 'FAILED' WHERE status IN ('PENDING', 'IN_PROGRESS');"
+            echo "UPDATE \"AssessmentSession\" SET status = 'FAILED' WHERE status IN ('PENDING', 'IN_PROGRESS');" | npx prisma db execute --stdin
             echo "=== Build ==="
             npm run build
             echo "=== Restart PM2 ==="

@@ -294,8 +294,13 @@ async function processAssessments() {
     const existingSession = await prisma.assessmentSession.findFirst({
       where: { configId: config.id, date: todayStr },
     });
-    // Skip if a session exists and isn't failed — allow retry for failed ones
-    if (existingSession && existingSession.status !== "FAILED") continue;
+    // Only skip if a session exists and is COMPLETED or actively IN_PROGRESS
+    if (existingSession && (existingSession.status === "COMPLETED" || existingSession.status === "IN_PROGRESS")) continue;
+    // Clean up any failed/pending session before creating a new one
+    if (existingSession) {
+      await prisma.assessmentAnswer.deleteMany({ where: { sessionId: existingSession.id } });
+      await prisma.assessmentSession.delete({ where: { id: existingSession.id } });
+    }
 
     const allQuestions = await prisma.assessmentQuestion.findMany({
       where: {
