@@ -200,3 +200,106 @@ Respond in this exact JSON format only, no markdown:
   const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
   return JSON.parse(cleaned);
 }
+
+// ---------------------------------------------------------------------------
+// Care command parsing (used by WhatsApp & Telegram assistants)
+// ---------------------------------------------------------------------------
+
+export type CareCommandIntent = "REMINDER" | "MEDICATION" | "ASSESSMENT" | "VIEW" | "EDIT" | "DELETE" | "CANCEL" | "UNKNOWN";
+
+// Alias for backward compat with WhatsApp
+export type WhatsAppIntentParse = CareCommandIntent;
+
+export interface ParsedCareCommand {
+  intent: CareCommandIntent;
+  elderlyName?: string | null;
+  title?: string | null;
+  description?: string | null;
+  name?: string | null;
+  dosage?: string | null;
+  instructions?: string | null;
+  scheduledTime?: string | null;
+  scheduledDate?: string | null;
+  recurrence?: string | null;
+  daysOfWeek?: number[] | null;
+  leadTimeMinutes?: number | null;
+  viewTarget?: "reminders" | "medications" | "assessments" | "logs" | null;
+  editTarget?: string | null;
+  editFields?: Record<string, string> | null;
+  deleteTarget?: string | null;
+}
+
+// Alias for backward compat with WhatsApp
+export type WhatsAppParsedCommand = ParsedCareCommand;
+
+export async function parseCareCommand(params: {
+  message: string;
+  pendingIntent?: string;
+}): Promise<ParsedCareCommand> {
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+  const prompt = `You are parsing a caregiver's message about managing an elderly person's care.
+
+Message: "${params.message}"
+${params.pendingIntent ? `Current pending task type: ${params.pendingIntent} (the user may be providing additional details for this task)` : ""}
+
+Determine the intent and extract structured information.
+
+Possible intents:
+- REMINDER: Creating a custom reminder (e.g. "remind mom to drink water at 3pm")
+- MEDICATION: Adding a medication with schedule (e.g. "add aspirin 100mg daily at 8am")
+- ASSESSMENT: Scheduling cognitive assessment (e.g. "schedule assessment at 9am")
+- VIEW: Viewing/checking existing items (e.g. "show reminders", "what medications", "last assessment results", "call history")
+- EDIT: Modifying existing items (e.g. "change aspirin time to 9am", "pause morning reminder", "update dosage")
+- DELETE: Removing items (e.g. "remove aspirin", "delete the morning reminder", "cancel assessment")
+- CANCEL: User wants to cancel current conversation/task (e.g. "cancel", "stop", "never mind")
+- UNKNOWN: Cannot determine intent
+
+For VIEW intent, set viewTarget to one of: "reminders", "medications", "assessments", "logs"
+For EDIT intent, set editTarget to a description of what to edit, and editFields to the changes
+For DELETE intent, set deleteTarget to a description of what to delete
+
+Extract any fields you can identify:
+- elderlyName: the name of the elderly person mentioned
+- title: reminder title
+- description: reminder description
+- name: medication name
+- dosage: medication dosage
+- instructions: medication instructions
+- scheduledTime: time in HH:MM 24-hour format (convert from AM/PM if needed)
+- scheduledDate: date in YYYY-MM-DD format
+- recurrence: one of NONE, EVERY_1_HOUR, EVERY_4_HOURS, EVERY_6_HOURS, EVERY_8_HOURS, EVERY_12_HOURS, DAILY, EVERY_OTHER_DAY, WEEKLY, MONTHLY, SPECIFIC_DAYS
+- daysOfWeek: array of day numbers (0=Sunday, 1=Monday, ..., 6=Saturday)
+- leadTimeMinutes: how many minutes before the scheduled time to remind
+
+Respond in JSON only, no markdown:
+{"intent":"REMINDER","elderlyName":null,"title":"drink water","description":null,"name":null,"dosage":null,"instructions":null,"scheduledTime":"15:00","scheduledDate":null,"recurrence":"DAILY","daysOfWeek":null,"leadTimeMinutes":null,"viewTarget":null,"editTarget":null,"editFields":null,"deleteTarget":null}`;
+
+  const result = await model.generateContent(prompt);
+  const text = result.response.text().trim();
+  const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  return JSON.parse(cleaned);
+}
+
+// Alias for backward compatibility with WhatsApp
+export const parseWhatsAppCareCommand = parseCareCommand;
+
+// ---------------------------------------------------------------------------
+// Audio transcription via Gemini multimodal
+// ---------------------------------------------------------------------------
+
+export async function transcribeAudio(audioBuffer: Buffer, mimeType: string): Promise<string> {
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+  const result = await model.generateContent([
+    { text: "Transcribe this audio message. Return ONLY the transcribed text, nothing else. If you cannot understand the audio, respond with just the word UNCLEAR." },
+    {
+      inlineData: {
+        mimeType: mimeType as "audio/ogg" | "audio/mpeg" | "audio/wav" | "audio/webm",
+        data: audioBuffer.toString("base64"),
+      },
+    },
+  ]);
+
+  return result.response.text().trim();
+}

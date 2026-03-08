@@ -3,10 +3,10 @@ import type { WhatsAppIntent } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import {
   parseWhatsAppCareCommand,
+  transcribeAudio,
   type WhatsAppParsedCommand,
   type WhatsAppIntentParse,
 } from "@/lib/gemini";
-import { speechToText } from "@/lib/elevenlabs";
 import {
   type MissingField,
   type ProfileOption,
@@ -143,7 +143,7 @@ export async function transcribeTwilioWhatsAppAudio(mediaUrl: string): Promise<s
 
   const contentType = mediaRes.headers.get("content-type") || "audio/ogg";
   const audioBuffer = Buffer.from(await mediaRes.arrayBuffer());
-  return speechToText(audioBuffer, contentType);
+  return transcribeAudio(audioBuffer, contentType);
 }
 
 export async function transcribeMetaWhatsAppAudio(mediaId: string): Promise<string> {
@@ -170,7 +170,7 @@ export async function transcribeMetaWhatsAppAudio(mediaId: string): Promise<stri
 
   const contentType = mediaRes.headers.get("content-type") || meta.mime_type || "audio/ogg";
   const audioBuffer = Buffer.from(await mediaRes.arrayBuffer());
-  return speechToText(audioBuffer, contentType);
+  return transcribeAudio(audioBuffer, contentType);
 }
 
 export async function sendMetaWhatsAppText(params: {
