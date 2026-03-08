@@ -196,6 +196,30 @@ model AssessmentSession {
   createdAt          DateTime           @default(now())
 }
 
+enum WhatsAppIntent {
+  NONE
+  REMINDER
+  MEDICATION
+  ASSESSMENT
+}
+
+model WhatsAppConversation {
+  id                   String          @id @default(cuid())
+  fromPhone            String          @unique
+  caregiverPhone       String?
+  caregiverId          String?
+  elderlyProfileId     String?
+  intent               WhatsAppIntent  @default(NONE)
+  state                Json?
+  lastUserMessage      String?
+  lastAssistantMessage String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([caregiverId])
+  @@index([elderlyProfileId])
+}
+
 model TelegramConversation {
   id                   String          @id @default(cuid())
   telegramChatId       String          @unique
