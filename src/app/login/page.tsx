@@ -96,9 +96,7 @@ function LoginContent() {
         className="w-full max-w-md space-y-8"
       >
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[var(--accent)] text-white font-bold text-xl mb-4">
-            S
-          </div>
+          <img src="/logo.png" alt="Seniora" className="inline-block w-16 h-16 rounded-2xl object-cover mb-4" />
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">
             {isSignUp ? "Create your account" : "Welcome back"}
           </h1>

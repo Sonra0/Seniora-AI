@@ -36,9 +36,12 @@ export default function Home() {
           borderBottom: "1px solid var(--border-subtle)",
         }}
       >
-        <span className="text-2xl font-bold" style={{ color: "var(--accent)" }}>
-          Seniora
-        </span>
+        <div className="flex items-center gap-2">
+          <img src="/logo.png" alt="Seniora" className="w-8 h-8 rounded-lg object-cover" />
+          <span className="text-2xl font-bold" style={{ color: "var(--accent)" }}>
+            Seniora
+          </span>
+        </div>
         <Link
           href="/login"
           className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:opacity-80"
@@ -65,9 +68,12 @@ export default function Home() {
         className="border-t px-6 py-8 text-center"
         style={{ borderColor: "var(--border-subtle)" }}
       >
-        <span className="text-lg font-bold" style={{ color: "var(--accent)" }}>
-          Seniora
-        </span>
+        <div className="flex items-center gap-2">
+          <img src="/logo.png" alt="Seniora" className="w-6 h-6 rounded object-cover" />
+          <span className="text-lg font-bold" style={{ color: "var(--accent)" }}>
+            Seniora
+          </span>
+        </div>
         <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
           &copy; 2026 Seniora. All rights reserved.
         </p>

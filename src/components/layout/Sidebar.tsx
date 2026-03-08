@@ -43,9 +43,7 @@ export function Sidebar() {
       >
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 h-16 border-b border-[var(--border-default)]">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--accent)] text-white font-bold text-sm shrink-0">
-            S
-          </div>
+          <img src="/logo.png" alt="Seniora" className="w-8 h-8 rounded-lg object-cover shrink-0" />
           {!collapsed && (
             <span className="text-lg font-semibold text-[var(--text-primary)]">Seniora</span>
           )}
